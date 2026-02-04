@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Plus, UserCircle, Search, MoreHorizontal, Edit, DollarSign } from 'lucide-react';
-import { useData } from '@/contexts/DataContext';
+import { Plus, UserCircle, Search, MoreHorizontal, Edit, DollarSign, Shield, Loader2 } from 'lucide-react';
+import { useProfiles, useUpdateProfile, useUserRoles, useUpdateUserRole } from '@/hooks/useProfiles';
+import { useAuth } from '@/contexts/AuthContext';
+import { AppRole } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,7 +15,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -21,124 +22,121 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 
 export default function Employees() {
-  const { employees, addEmployee, updateEmployee } = useData();
+  const { user } = useAuth();
+  const { data: profiles = [], isLoading } = useProfiles();
+  const { data: userRoles = [] } = useUserRoles();
+  const updateProfile = useUpdateProfile();
+  const updateUserRole = useUpdateUserRole();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<string | null>(null);
+  const [editingProfile, setEditingProfile] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    rate: 0,
+    hourly_rate: 0,
+    role: 'employee' as AppRole,
   });
 
-  const filteredEmployees = employees.filter(employee =>
-    employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    employee.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredProfiles = profiles.filter(profile =>
+    profile.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    profile.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const activeCount = employees.filter(e => e.isActive).length;
+  const activeCount = profiles.filter(p => p.is_active).length;
 
-  const handleSubmit = () => {
-    if (!formData.name || !formData.email || formData.rate <= 0) {
-      toast.error('Por favor completa todos los campos correctamente');
-      return;
-    }
-
-    if (editingEmployee) {
-      updateEmployee(editingEmployee, formData);
-      toast.success('Empleado actualizado');
-    } else {
-      addEmployee({ ...formData, isActive: true });
-      toast.success('Empleado creado');
-    }
-
-    setFormData({ name: '', email: '', rate: 0 });
-    setEditingEmployee(null);
-    setIsDialogOpen(false);
+  const getUserRole = (userId: string): AppRole => {
+    const role = userRoles.find(r => r.user_id === userId);
+    return (role?.role as AppRole) || 'employee';
   };
 
-  const handleEdit = (employeeId: string) => {
-    const employee = employees.find(e => e.id === employeeId);
-    if (employee) {
+  const handleEdit = (profileId: string) => {
+    const profile = profiles.find(p => p.id === profileId);
+    if (profile) {
       setFormData({
-        name: employee.name,
-        email: employee.email,
-        rate: employee.rate,
+        name: profile.name,
+        email: profile.email,
+        hourly_rate: Number(profile.hourly_rate),
+        role: getUserRole(profile.user_id),
       });
-      setEditingEmployee(employeeId);
+      setEditingProfile(profileId);
       setIsDialogOpen(true);
     }
   };
 
-  const handleToggleActive = (employeeId: string, isActive: boolean) => {
-    updateEmployee(employeeId, { isActive: !isActive });
-    toast.success(isActive ? 'Empleado dado de baja' : 'Empleado dado de alta');
+  const handleSubmit = async () => {
+    if (!formData.name || formData.hourly_rate < 0) {
+      toast.error('Por favor completa todos los campos correctamente');
+      return;
+    }
+
+    try {
+      const profile = profiles.find(p => p.id === editingProfile);
+      if (!profile) return;
+
+      await updateProfile.mutateAsync({
+        id: editingProfile!,
+        updates: {
+          name: formData.name,
+          hourly_rate: formData.hourly_rate,
+        },
+      });
+
+      await updateUserRole.mutateAsync({
+        userId: profile.user_id,
+        role: formData.role,
+      });
+
+      toast.success('Empleado actualizado');
+      setIsDialogOpen(false);
+      setEditingProfile(null);
+    } catch (error) {
+      toast.error('Error al actualizar el empleado');
+    }
   };
+
+  const handleToggleActive = async (profileId: string, isActive: boolean) => {
+    try {
+      await updateProfile.mutateAsync({
+        id: profileId,
+        updates: { is_active: !isActive },
+      });
+      toast.success(isActive ? 'Empleado dado de baja' : 'Empleado dado de alta');
+    } catch (error) {
+      toast.error('Error al actualizar el estado');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const avgRate = activeCount > 0
+    ? Math.round(profiles.filter(p => p.is_active).reduce((sum, p) => sum + Number(p.hourly_rate), 0) / activeCount)
+    : 0;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Empleados</h1>
-          <p className="text-muted-foreground">Gestiona los empleados y sus tarifas</p>
+          <p className="text-muted-foreground">Gestiona los empleados, tarifas y roles</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2" onClick={() => { setEditingEmployee(null); setFormData({ name: '', email: '', rate: 0 }); }}>
-              <Plus className="h-4 w-4" />
-              Nuevo Empleado
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingEmployee ? 'Editar Empleado' : 'Nuevo Empleado'}</DialogTitle>
-              <DialogDescription>
-                {editingEmployee ? 'Modifica los datos del empleado' : 'Añade un nuevo empleado a la empresa'}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Nombre *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Ej: Juan García"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="juan@empresa.com"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="rate">Tarifa por hora (€) *</Label>
-                <Input
-                  id="rate"
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={formData.rate || ''}
-                  onChange={(e) => setFormData({ ...formData, rate: parseFloat(e.target.value) || 0 })}
-                  placeholder="45"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-              <Button onClick={handleSubmit}>{editingEmployee ? 'Guardar' : 'Crear'}</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -150,7 +148,7 @@ export default function Employees() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Empleados</p>
-                <p className="text-2xl font-bold text-foreground">{employees.length}</p>
+                <p className="text-2xl font-bold text-foreground">{profiles.length}</p>
               </div>
             </div>
           </CardContent>
@@ -176,9 +174,7 @@ export default function Employees() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Tarifa Media</p>
-                <p className="text-2xl font-bold text-foreground">
-                  €{Math.round(employees.filter(e => e.isActive).reduce((sum, e) => sum + e.rate, 0) / activeCount || 0)}/h
-                </p>
+                <p className="text-2xl font-bold text-foreground">€{avgRate}/h</p>
               </div>
             </div>
           </CardContent>
@@ -205,28 +201,35 @@ export default function Employees() {
                 <TableHead className="table-header">Empleado</TableHead>
                 <TableHead className="table-header">Email</TableHead>
                 <TableHead className="table-header">Tarifa/Hora</TableHead>
+                <TableHead className="table-header">Rol</TableHead>
                 <TableHead className="table-header">Estado</TableHead>
                 <TableHead className="table-header text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredEmployees.map(employee => (
-                <TableRow key={employee.id}>
+              {filteredProfiles.map(profile => (
+                <TableRow key={profile.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
                         <UserCircle className="h-5 w-5 text-primary" />
                       </div>
-                      <span className="font-medium">{employee.name}</span>
+                      <span className="font-medium">{profile.name}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{employee.email}</TableCell>
+                  <TableCell className="text-muted-foreground">{profile.email}</TableCell>
                   <TableCell>
-                    <span className="font-semibold text-primary">€{employee.rate}/h</span>
+                    <span className="font-semibold text-primary">€{profile.hourly_rate}/h</span>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={employee.isActive ? 'default' : 'secondary'}>
-                      {employee.isActive ? 'Activo' : 'Baja'}
+                    <Badge variant={getUserRole(profile.user_id) === 'admin' ? 'default' : 'outline'} className="gap-1">
+                      <Shield className="h-3 w-3" />
+                      {getUserRole(profile.user_id) === 'admin' ? 'Admin' : 'Empleado'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={profile.is_active ? 'default' : 'secondary'}>
+                      {profile.is_active ? 'Activo' : 'Baja'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -237,13 +240,15 @@ export default function Employees() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEdit(employee.id)}>
+                        <DropdownMenuItem onClick={() => handleEdit(profile.id)}>
                           <Edit className="h-4 w-4 mr-2" />
                           Editar
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleToggleActive(employee.id, employee.isActive)}>
-                          {employee.isActive ? 'Dar de baja' : 'Dar de alta'}
-                        </DropdownMenuItem>
+                        {profile.user_id !== user?.id && (
+                          <DropdownMenuItem onClick={() => handleToggleActive(profile.id, profile.is_active)}>
+                            {profile.is_active ? 'Dar de baja' : 'Dar de alta'}
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -252,7 +257,7 @@ export default function Employees() {
             </TableBody>
           </Table>
 
-          {filteredEmployees.length === 0 && (
+          {filteredProfiles.length === 0 && (
             <div className="text-center py-12">
               <UserCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
               <p className="text-muted-foreground">No se encontraron empleados</p>
@@ -260,6 +265,54 @@ export default function Employees() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Empleado</DialogTitle>
+            <DialogDescription>
+              Modifica los datos, tarifa y rol del empleado
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Nombre</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="rate">Tarifa por hora (€)</Label>
+              <Input
+                id="rate"
+                type="number"
+                min="0"
+                step="0.5"
+                value={formData.hourly_rate || ''}
+                onChange={(e) => setFormData({ ...formData, hourly_rate: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="role">Rol</Label>
+              <Select value={formData.role} onValueChange={(value: AppRole) => setFormData({ ...formData, role: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="employee">Empleado</SelectItem>
+                  <SelectItem value="admin">Administrador</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSubmit}>Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

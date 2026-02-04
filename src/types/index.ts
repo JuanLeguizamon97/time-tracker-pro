@@ -1,42 +1,54 @@
-export interface Employee {
+export type AppRole = 'admin' | 'employee';
+
+export interface Profile {
   id: string;
+  user_id: string;
   name: string;
   email: string;
-  rate: number;
-  isActive: boolean;
-  createdAt: Date;
+  hourly_rate: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserRole {
+  id: string;
+  user_id: string;
+  role: AppRole;
 }
 
 export interface Client {
   id: string;
   name: string;
-  email: string;
-  phone?: string;
-  isActive: boolean;
-  createdAt: Date;
+  email: string | null;
+  phone: string | null;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface Project {
   id: string;
   name: string;
-  clientId: string;
-  description?: string;
-  isActive: boolean;
-  createdAt: Date;
+  client_id: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface TimeEntry {
   id: string;
-  employeeId: string;
-  projectId: string;
-  date: Date;
+  user_id: string;
+  project_id: string;
+  date: string;
   hours: number;
-  description?: string;
-  createdAt: Date;
+  created_at: string;
 }
 
-export interface WeeklyTimesheet {
-  employeeId: string;
-  weekStart: Date;
-  entries: TimeEntry[];
+export interface ProjectWithClient extends Project {
+  clients?: Client;
+}
+
+export interface TimeEntryWithDetails extends TimeEntry {
+  projects?: ProjectWithClient;
+  profiles?: Profile;
 }

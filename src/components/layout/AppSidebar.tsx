@@ -1,5 +1,6 @@
-import { Clock, Calendar, Briefcase, Users, FileText, UserCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Clock, Calendar, Briefcase, Users, FileText, UserCircle, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Sidebar,
   SidebarContent,
@@ -15,7 +16,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 
-const navigationItems = [
+const adminNavigationItems = [
   { title: 'Registro Semanal', url: '/', icon: Clock },
   { title: 'Historial', url: '/historial', icon: Calendar },
   { title: 'Proyectos', url: '/proyectos', icon: Briefcase },
@@ -24,9 +25,17 @@ const navigationItems = [
   { title: 'Facturación', url: '/facturacion', icon: FileText },
 ];
 
+const employeeNavigationItems = [
+  { title: 'Registro Semanal', url: '/', icon: Clock },
+  { title: 'Historial', url: '/historial', icon: Calendar },
+];
+
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
+  const { isAdmin, profile, signOut } = useAuth();
   const isCollapsed = state === 'collapsed';
+
+  const navigationItems = isAdmin ? adminNavigationItems : employeeNavigationItems;
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
@@ -73,7 +82,22 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-2">
+      <SidebarFooter className="p-2 space-y-2">
+        {!isCollapsed && profile && (
+          <div className="px-3 py-2 text-sm text-sidebar-muted">
+            <p className="font-medium text-sidebar-foreground">{profile.name}</p>
+            <p className="text-xs">{isAdmin ? 'Administrador' : 'Empleado'}</p>
+          </div>
+        )}
+        <Button
+          variant="ghost"
+          size={isCollapsed ? 'icon' : 'default'}
+          onClick={signOut}
+          className="w-full text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent"
+        >
+          <LogOut className="h-5 w-5" />
+          {!isCollapsed && <span className="ml-2">Cerrar Sesión</span>}
+        </Button>
         <Button
           variant="ghost"
           size="icon"
