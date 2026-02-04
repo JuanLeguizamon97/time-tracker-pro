@@ -1,8 +1,11 @@
 import { useState, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { CalendarIcon, ChevronLeft, ChevronRight, FileText, DollarSign, Users, Briefcase } from 'lucide-react';
-import { useData } from '@/contexts/DataContext';
+import { CalendarIcon, ChevronLeft, ChevronRight, FileText, DollarSign, Users, Briefcase, Loader2 } from 'lucide-react';
+import { useProfiles } from '@/hooks/useProfiles';
+import { useClients } from '@/hooks/useClients';
+import { useProjects } from '@/hooks/useProjects';
+import { useTimeEntriesByDateRange } from '@/hooks/useTimeEntries';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
@@ -12,18 +15,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 
 export default function Billing() {
-  const { employees, clients, projects, timeEntries } = useData();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const monthStart = startOfMonth(selectedDate);
   const monthEnd = endOfMonth(selectedDate);
 
-  const monthEntries = useMemo(() => {
-    return timeEntries.filter(entry => {
-      const entryDate = new Date(entry.date);
-      return entryDate >= monthStart && entryDate <= monthEnd;
-    });
-  }, [timeEntries, monthStart, monthEnd]);
+  const { data: profiles = [] } = useProfiles();
+  const { data: clients = [] } = useClients();
+  const { data: projects = [] } = useProjects();
+  const { data: timeEntries = [], isLoading } = useTimeEntriesByDateRange(monthStart, monthEnd);
 
   const billingByProject = useMemo(() => {
     const projectBilling: Record<string, {
@@ -34,15 +34,15 @@ export default function Billing() {
       totalAmount: number;
     }> = {};
 
-    monthEntries.forEach(entry => {
-      const project = projects.find(p => p.id === entry.projectId);
-      const client = clients.find(c => c.id === project?.clientId);
-      const employee = employees.find(e => e.id === entry.employeeId);
+    timeEntries.forEach(entry => {
+      const project = projects.find(p => p.id === entry.project_id);
+      const client = clients.find(c => c.id === project?.client_id);
+      const profile = profiles.find(p => p.user_id === entry.user_id);
 
-      if (!project || !employee) return;
+      if (!project || !profile) return;
 
-      if (!projectBilling[entry.projectId]) {
-        projectBilling[entry.projectId] = {
+      if (!projectBilling[entry.project_id]) {
+        projectBilling[entry.project_id] = {
           projectName: project.name,
           clientName: client?.name || 'Sin cliente',
           employeeDetails: [],
@@ -51,28 +51,31 @@ export default function Billing() {
         };
       }
 
-      const existingEmployee = projectBilling[entry.projectId].employeeDetails.find(
-        e => e.name === employee.name
+      const existingEmployee = projectBilling[entry.project_id].employeeDetails.find(
+        e => e.name === profile.name
       );
 
+      const hours = Number(entry.hours);
+      const rate = Number(profile.hourly_rate);
+
       if (existingEmployee) {
-        existingEmployee.hours += entry.hours;
+        existingEmployee.hours += hours;
         existingEmployee.total = existingEmployee.hours * existingEmployee.rate;
       } else {
-        projectBilling[entry.projectId].employeeDetails.push({
-          name: employee.name,
-          hours: entry.hours,
-          rate: employee.rate,
-          total: entry.hours * employee.rate,
+        projectBilling[entry.project_id].employeeDetails.push({
+          name: profile.name,
+          hours: hours,
+          rate: rate,
+          total: hours * rate,
         });
       }
 
-      projectBilling[entry.projectId].totalHours += entry.hours;
-      projectBilling[entry.projectId].totalAmount += entry.hours * employee.rate;
+      projectBilling[entry.project_id].totalHours += hours;
+      projectBilling[entry.project_id].totalAmount += hours * rate;
     });
 
     return Object.entries(projectBilling).sort((a, b) => b[1].totalAmount - a[1].totalAmount);
-  }, [monthEntries, projects, clients, employees]);
+  }, [timeEntries, projects, clients, profiles]);
 
   const billingByClient = useMemo(() => {
     const clientBilling: Record<string, {
@@ -121,6 +124,14 @@ export default function Billing() {
   const navigateMonth = (direction: 'prev' | 'next') => {
     setSelectedDate(prev => direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1));
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

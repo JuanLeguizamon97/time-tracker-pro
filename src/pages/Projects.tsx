@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Plus, Briefcase, Search, MoreHorizontal, Edit, Trash2 } from 'lucide-react';
-import { useData } from '@/contexts/DataContext';
+import { Plus, Briefcase, Search, MoreHorizontal, Edit, Loader2 } from 'lucide-react';
+import { useProjects, useCreateProject, useUpdateProject } from '@/hooks/useProjects';
+import { useActiveClients } from '@/hooks/useClients';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -26,42 +27,52 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 
 export default function Projects() {
-  const { projects, clients, addProject, updateProject } = useData();
+  const { data: projects = [], isLoading } = useProjects();
+  const { data: clients = [] } = useActiveClients();
+  const createProject = useCreateProject();
+  const updateProject = useUpdateProject();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
-    clientId: '',
+    client_id: '',
     description: '',
   });
 
   const filteredProjects = projects.filter(project =>
     project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    clients.find(c => c.id === project.clientId)?.name.toLowerCase().includes(searchTerm.toLowerCase())
+    project.clients?.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const getClientName = (clientId: string) => {
-    return clients.find(c => c.id === clientId)?.name || 'Sin cliente';
-  };
-
-  const handleSubmit = () => {
-    if (!formData.name || !formData.clientId) {
+  const handleSubmit = async () => {
+    if (!formData.name || !formData.client_id) {
       toast.error('Por favor completa los campos obligatorios');
       return;
     }
 
-    if (editingProject) {
-      updateProject(editingProject, formData);
-      toast.success('Proyecto actualizado');
-    } else {
-      addProject({ ...formData, isActive: true });
-      toast.success('Proyecto creado');
-    }
+    try {
+      if (editingProject) {
+        await updateProject.mutateAsync({
+          id: editingProject,
+          updates: formData,
+        });
+        toast.success('Proyecto actualizado');
+      } else {
+        await createProject.mutateAsync({
+          ...formData,
+          is_active: true,
+        });
+        toast.success('Proyecto creado');
+      }
 
-    setFormData({ name: '', clientId: '', description: '' });
-    setEditingProject(null);
-    setIsDialogOpen(false);
+      setFormData({ name: '', client_id: '', description: '' });
+      setEditingProject(null);
+      setIsDialogOpen(false);
+    } catch (error) {
+      toast.error('Error al guardar el proyecto');
+    }
   };
 
   const handleEdit = (projectId: string) => {
@@ -69,7 +80,7 @@ export default function Projects() {
     if (project) {
       setFormData({
         name: project.name,
-        clientId: project.clientId,
+        client_id: project.client_id,
         description: project.description || '',
       });
       setEditingProject(projectId);
@@ -77,12 +88,25 @@ export default function Projects() {
     }
   };
 
-  const handleToggleActive = (projectId: string, isActive: boolean) => {
-    updateProject(projectId, { isActive: !isActive });
-    toast.success(isActive ? 'Proyecto desactivado' : 'Proyecto activado');
+  const handleToggleActive = async (projectId: string, isActive: boolean) => {
+    try {
+      await updateProject.mutateAsync({
+        id: projectId,
+        updates: { is_active: !isActive },
+      });
+      toast.success(isActive ? 'Proyecto desactivado' : 'Proyecto activado');
+    } catch (error) {
+      toast.error('Error al actualizar el proyecto');
+    }
   };
 
-  const activeClients = clients.filter(c => c.isActive);
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -93,7 +117,7 @@ export default function Projects() {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2" onClick={() => { setEditingProject(null); setFormData({ name: '', clientId: '', description: '' }); }}>
+            <Button className="gap-2" onClick={() => { setEditingProject(null); setFormData({ name: '', client_id: '', description: '' }); }}>
               <Plus className="h-4 w-4" />
               Nuevo Proyecto
             </Button>
@@ -117,12 +141,12 @@ export default function Projects() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="client">Cliente *</Label>
-                <Select value={formData.clientId} onValueChange={(value) => setFormData({ ...formData, clientId: value })}>
+                <Select value={formData.client_id} onValueChange={(value) => setFormData({ ...formData, client_id: value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar cliente" />
                   </SelectTrigger>
                   <SelectContent>
-                    {activeClients.map(client => (
+                    {clients.map(client => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.name}
                       </SelectItem>
@@ -168,7 +192,7 @@ export default function Projects() {
                 </div>
                 <div>
                   <CardTitle className="text-lg">{project.name}</CardTitle>
-                  <p className="text-sm text-muted-foreground">{getClientName(project.clientId)}</p>
+                  <p className="text-sm text-muted-foreground">{project.clients?.name || 'Sin cliente'}</p>
                 </div>
               </div>
               <DropdownMenu>
@@ -182,8 +206,8 @@ export default function Projects() {
                     <Edit className="h-4 w-4 mr-2" />
                     Editar
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleToggleActive(project.id, project.isActive)}>
-                    {project.isActive ? 'Desactivar' : 'Activar'}
+                  <DropdownMenuItem onClick={() => handleToggleActive(project.id, project.is_active)}>
+                    {project.is_active ? 'Desactivar' : 'Activar'}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -192,8 +216,8 @@ export default function Projects() {
               {project.description && (
                 <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{project.description}</p>
               )}
-              <Badge variant={project.isActive ? 'default' : 'secondary'}>
-                {project.isActive ? 'Activo' : 'Inactivo'}
+              <Badge variant={project.is_active ? 'default' : 'secondary'}>
+                {project.is_active ? 'Activo' : 'Inactivo'}
               </Badge>
             </CardContent>
           </Card>

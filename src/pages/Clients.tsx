@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Plus, Users, Search, MoreHorizontal, Edit, ChevronDown, ChevronRight, Briefcase } from 'lucide-react';
-import { useData } from '@/contexts/DataContext';
+import { Plus, Users, Search, MoreHorizontal, Edit, ChevronDown, ChevronRight, Briefcase, Loader2 } from 'lucide-react';
+import { useClients, useCreateClient, useUpdateClient } from '@/hooks/useClients';
+import { useProjects } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -29,7 +30,11 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 
 export default function Clients() {
-  const { clients, projects, addClient, updateClient, getProjectsByClient } = useData();
+  const { data: clients = [], isLoading } = useClients();
+  const { data: projects = [] } = useProjects();
+  const createClient = useCreateClient();
+  const updateClient = useUpdateClient();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<string | null>(null);
@@ -42,8 +47,12 @@ export default function Clients() {
 
   const filteredClients = clients.filter(client =>
     client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.email.toLowerCase().includes(searchTerm.toLowerCase())
+    (client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
   );
+
+  const getProjectsByClient = (clientId: string) => {
+    return projects.filter(p => p.client_id === clientId);
+  };
 
   const toggleExpanded = (clientId: string) => {
     setExpandedClients(prev => {
@@ -57,23 +66,33 @@ export default function Clients() {
     });
   };
 
-  const handleSubmit = () => {
-    if (!formData.name || !formData.email) {
+  const handleSubmit = async () => {
+    if (!formData.name) {
       toast.error('Por favor completa los campos obligatorios');
       return;
     }
 
-    if (editingClient) {
-      updateClient(editingClient, formData);
-      toast.success('Cliente actualizado');
-    } else {
-      addClient({ ...formData, isActive: true });
-      toast.success('Cliente creado');
-    }
+    try {
+      if (editingClient) {
+        await updateClient.mutateAsync({
+          id: editingClient,
+          updates: formData,
+        });
+        toast.success('Cliente actualizado');
+      } else {
+        await createClient.mutateAsync({
+          ...formData,
+          is_active: true,
+        });
+        toast.success('Cliente creado');
+      }
 
-    setFormData({ name: '', email: '', phone: '' });
-    setEditingClient(null);
-    setIsDialogOpen(false);
+      setFormData({ name: '', email: '', phone: '' });
+      setEditingClient(null);
+      setIsDialogOpen(false);
+    } catch (error) {
+      toast.error('Error al guardar el cliente');
+    }
   };
 
   const handleEdit = (clientId: string) => {
@@ -81,7 +100,7 @@ export default function Clients() {
     if (client) {
       setFormData({
         name: client.name,
-        email: client.email,
+        email: client.email || '',
         phone: client.phone || '',
       });
       setEditingClient(clientId);
@@ -89,10 +108,25 @@ export default function Clients() {
     }
   };
 
-  const handleToggleActive = (clientId: string, isActive: boolean) => {
-    updateClient(clientId, { isActive: !isActive });
-    toast.success(isActive ? 'Cliente desactivado' : 'Cliente activado');
+  const handleToggleActive = async (clientId: string, isActive: boolean) => {
+    try {
+      await updateClient.mutateAsync({
+        id: clientId,
+        updates: { is_active: !isActive },
+      });
+      toast.success(isActive ? 'Cliente desactivado' : 'Cliente activado');
+    } catch (error) {
+      toast.error('Error al actualizar el cliente');
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -126,7 +160,7 @@ export default function Clients() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="email">Email *</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
@@ -184,7 +218,7 @@ export default function Clients() {
                       </div>
                       <div>
                         <CardTitle className="text-lg">{client.name}</CardTitle>
-                        <p className="text-sm text-muted-foreground">{client.email}</p>
+                        <p className="text-sm text-muted-foreground">{client.email || 'Sin email'}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -192,8 +226,8 @@ export default function Clients() {
                         <Briefcase className="h-3 w-3" />
                         {clientProjects.length} proyectos
                       </Badge>
-                      <Badge variant={client.isActive ? 'default' : 'secondary'}>
-                        {client.isActive ? 'Activo' : 'Inactivo'}
+                      <Badge variant={client.is_active ? 'default' : 'secondary'}>
+                        {client.is_active ? 'Activo' : 'Inactivo'}
                       </Badge>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -206,8 +240,8 @@ export default function Clients() {
                             <Edit className="h-4 w-4 mr-2" />
                             Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleToggleActive(client.id, client.isActive)}>
-                            {client.isActive ? 'Desactivar' : 'Activar'}
+                          <DropdownMenuItem onClick={() => handleToggleActive(client.id, client.is_active)}>
+                            {client.is_active ? 'Desactivar' : 'Activar'}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -224,8 +258,8 @@ export default function Clients() {
                             <div key={project.id} className="flex items-center gap-2 p-3 bg-muted/30 rounded-lg">
                               <Briefcase className="h-4 w-4 text-primary" />
                               <span className="font-medium text-sm">{project.name}</span>
-                              <Badge variant={project.isActive ? 'default' : 'secondary'} className="ml-auto text-xs">
-                                {project.isActive ? 'Activo' : 'Inactivo'}
+                              <Badge variant={project.is_active ? 'default' : 'secondary'} className="ml-auto text-xs">
+                                {project.is_active ? 'Activo' : 'Inactivo'}
                               </Badge>
                             </div>
                           ))}
