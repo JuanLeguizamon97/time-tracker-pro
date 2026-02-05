@@ -56,11 +56,38 @@ export function useProfileWithRole(userId: string | undefined) {
   });
 }
 
+export function useAdminProfiles() {
+  return useQuery({
+    queryKey: ['profiles', 'admins'],
+    queryFn: async () => {
+      const { data: adminRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'admin');
+      
+      if (rolesError) throw rolesError;
+      
+      const adminUserIds = adminRoles.map(r => r.user_id);
+      if (adminUserIds.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('user_id', adminUserIds)
+        .eq('is_active', true)
+        .order('name');
+      
+      if (error) throw error;
+      return data as Profile[];
+    },
+  });
+}
+
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Profile> }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Profile> & { supervisor_id?: string | null } }) => {
       const { data, error } = await supabase
         .from('profiles')
         .update(updates)

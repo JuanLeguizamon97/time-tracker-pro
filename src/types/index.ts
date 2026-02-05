@@ -1,5 +1,13 @@
 export type AppRole = 'admin' | 'employee';
 
+export interface EmployeeProject {
+  id: string;
+  user_id: string;
+  project_id: string;
+  assigned_at: string;
+  assigned_by: string | null;
+}
+
 export interface Profile {
   id: string;
   user_id: string;
@@ -7,6 +15,7 @@ export interface Profile {
   email: string;
   hourly_rate: number;
   is_active: boolean;
+  supervisor_id: string | null;
   created_at: string;
   updated_at: string;
 }
