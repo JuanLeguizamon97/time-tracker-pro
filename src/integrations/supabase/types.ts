@@ -41,6 +41,38 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_projects: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          id: string
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          id?: string
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          id?: string
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -49,6 +81,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          supervisor_id: string | null
           updated_at: string
           user_id: string
         }
@@ -59,6 +92,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          supervisor_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -69,6 +103,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          supervisor_id?: string | null
           updated_at?: string
           user_id?: string
         }

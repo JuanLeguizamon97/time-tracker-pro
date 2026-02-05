@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Plus, UserCircle, Search, MoreHorizontal, Edit, DollarSign, Shield, Loader2 } from 'lucide-react';
-import { useProfiles, useUpdateProfile, useUserRoles, useUpdateUserRole } from '@/hooks/useProfiles';
+import { UserCircle, Search, MoreHorizontal, Edit, DollarSign, Shield, Loader2, FolderKanban, Users } from 'lucide-react';
+import { useProfiles, useUpdateProfile, useUserRoles, useUpdateUserRole, useAdminProfiles } from '@/hooks/useProfiles';
+import { useEmployeeProjects } from '@/hooks/useEmployeeProjects';
 import { useAuth } from '@/contexts/AuthContext';
-import { AppRole } from '@/types';
+import { AppRole, Profile } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -31,22 +33,28 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { EmployeeProjectsDialog } from '@/components/EmployeeProjectsDialog';
 
 export default function Employees() {
   const { user } = useAuth();
   const { data: profiles = [], isLoading } = useProfiles();
   const { data: userRoles = [] } = useUserRoles();
+  const { data: adminProfiles = [] } = useAdminProfiles();
+  const { data: employeeProjects = [] } = useEmployeeProjects();
   const updateProfile = useUpdateProfile();
   const updateUserRole = useUpdateUserRole();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isProjectsDialogOpen, setIsProjectsDialogOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<string | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<Profile | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     hourly_rate: 0,
     role: 'employee' as AppRole,
+    supervisor_id: '' as string | null,
   });
 
   const filteredProfiles = profiles.filter(profile =>
@@ -61,6 +69,16 @@ export default function Employees() {
     return (role?.role as AppRole) || 'employee';
   };
 
+  const getSupervisorName = (supervisorId: string | null): string => {
+    if (!supervisorId) return '-';
+    const supervisor = profiles.find(p => p.user_id === supervisorId);
+    return supervisor?.name || '-';
+  };
+
+  const getAssignedProjectsCount = (userId: string): number => {
+    return employeeProjects.filter(ep => ep.user_id === userId).length;
+  };
+
   const handleEdit = (profileId: string) => {
     const profile = profiles.find(p => p.id === profileId);
     if (profile) {
@@ -69,10 +87,16 @@ export default function Employees() {
         email: profile.email,
         hourly_rate: Number(profile.hourly_rate),
         role: getUserRole(profile.user_id),
+        supervisor_id: profile.supervisor_id || '',
       });
       setEditingProfile(profileId);
       setIsDialogOpen(true);
     }
+  };
+
+  const handleOpenProjects = (profile: Profile) => {
+    setSelectedEmployee(profile);
+    setIsProjectsDialogOpen(true);
   };
 
   const handleSubmit = async () => {
@@ -90,6 +114,7 @@ export default function Employees() {
         updates: {
           name: formData.name,
           hourly_rate: formData.hourly_rate,
+          supervisor_id: formData.supervisor_id || null,
         },
       });
 
@@ -135,7 +160,7 @@ export default function Employees() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Empleados</h1>
-          <p className="text-muted-foreground">Gestiona los empleados, tarifas y roles</p>
+          <p className="text-muted-foreground">Gestiona empleados, tarifas, roles y asignaciones</p>
         </div>
       </div>
 
@@ -202,6 +227,8 @@ export default function Employees() {
                 <TableHead className="table-header">Email</TableHead>
                 <TableHead className="table-header">Tarifa/Hora</TableHead>
                 <TableHead className="table-header">Rol</TableHead>
+                <TableHead className="table-header">Supervisor</TableHead>
+                <TableHead className="table-header">Proyectos</TableHead>
                 <TableHead className="table-header">Estado</TableHead>
                 <TableHead className="table-header text-right">Acciones</TableHead>
               </TableRow>
@@ -227,6 +254,15 @@ export default function Employees() {
                       {getUserRole(profile.user_id) === 'admin' ? 'Admin' : 'Empleado'}
                     </Badge>
                   </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {getSupervisorName(profile.supervisor_id)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className="gap-1">
+                      <FolderKanban className="h-3 w-3" />
+                      {getAssignedProjectsCount(profile.user_id)}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <Badge variant={profile.is_active ? 'default' : 'secondary'}>
                       {profile.is_active ? 'Activo' : 'Baja'}
@@ -244,6 +280,11 @@ export default function Employees() {
                           <Edit className="h-4 w-4 mr-2" />
                           Editar
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleOpenProjects(profile)}>
+                          <FolderKanban className="h-4 w-4 mr-2" />
+                          Asignar Proyectos
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         {profile.user_id !== user?.id && (
                           <DropdownMenuItem onClick={() => handleToggleActive(profile.id, profile.is_active)}>
                             {profile.is_active ? 'Dar de baja' : 'Dar de alta'}
@@ -271,7 +312,7 @@ export default function Employees() {
           <DialogHeader>
             <DialogTitle>Editar Empleado</DialogTitle>
             <DialogDescription>
-              Modifica los datos, tarifa y rol del empleado
+              Modifica los datos, tarifa, rol y supervisor del empleado
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -306,6 +347,25 @@ export default function Employees() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="supervisor">Supervisor</Label>
+              <Select 
+                value={formData.supervisor_id || 'none'} 
+                onValueChange={(value) => setFormData({ ...formData, supervisor_id: value === 'none' ? null : value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar supervisor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin supervisor</SelectItem>
+                  {adminProfiles.map(admin => (
+                    <SelectItem key={admin.user_id} value={admin.user_id}>
+                      {admin.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
@@ -313,6 +373,12 @@ export default function Employees() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <EmployeeProjectsDialog
+        open={isProjectsDialogOpen}
+        onOpenChange={setIsProjectsDialogOpen}
+        employee={selectedEmployee}
+      />
     </div>
   );
 }

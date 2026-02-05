@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { CalendarIcon, ChevronLeft, ChevronRight, Save, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActiveProjects } from '@/hooks/useProjects';
+import { useEmployeeProjectsByUser } from '@/hooks/useEmployeeProjects';
 import { useTimeEntriesByDateRange, useUpsertTimeEntry } from '@/hooks/useTimeEntries';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -12,8 +13,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
+interface ProjectWithClient {
+  id: string;
+  name: string;
+  clients?: { name: string } | null;
+}
+
 export default function Timesheet() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [newEntries, setNewEntries] = useState<Record<string, Record<string, number>>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -22,13 +29,29 @@ export default function Timesheet() {
   const weekEnd = addDays(weekStart, 6);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
-  const { data: projects = [], isLoading: projectsLoading } = useActiveProjects();
+  // Admins see all projects, employees see only assigned projects
+  const { data: allProjects = [], isLoading: allProjectsLoading } = useActiveProjects();
+  const { data: employeeAssignments = [], isLoading: assignmentsLoading } = useEmployeeProjectsByUser(user?.id);
+  
   const { data: weekEntries = [], isLoading: entriesLoading } = useTimeEntriesByDateRange(
     weekStart,
     weekEnd,
     user?.id
   );
   const upsertTimeEntry = useUpsertTimeEntry();
+
+  // Build the list of projects based on role
+  const projects: ProjectWithClient[] = isAdmin 
+    ? allProjects.map(p => ({
+        id: p.id,
+        name: p.name,
+        clients: p.clients,
+      }))
+    : employeeAssignments.map((ep: any) => ({
+        id: ep.projects.id,
+        name: ep.projects.name,
+        clients: ep.projects.clients,
+      }));
 
   const getHoursForDay = (projectId: string, date: Date): number => {
     const dateKey = format(date, 'yyyy-MM-dd');
@@ -101,7 +124,9 @@ export default function Timesheet() {
     setSelectedDate(prev => addDays(prev, direction === 'prev' ? -7 : 7));
   };
 
-  if (projectsLoading || entriesLoading) {
+  const isLoading = allProjectsLoading || assignmentsLoading || entriesLoading;
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -201,7 +226,9 @@ export default function Timesheet() {
                 {projects.length === 0 && (
                   <tr>
                     <td colSpan={9} className="text-center py-8 text-muted-foreground">
-                      No hay proyectos activos disponibles
+                      {isAdmin 
+                        ? 'No hay proyectos activos disponibles'
+                        : 'No tienes proyectos asignados. Contacta a tu administrador.'}
                     </td>
                   </tr>
                 )}
