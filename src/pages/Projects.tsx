@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 
 export default function Projects() {
@@ -31,23 +30,27 @@ export default function Projects() {
   const { data: clients = [] } = useActiveClients();
   const createProject = useCreateProject();
   const updateProject = useUpdateProject();
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    name: '',
-    client_id: '',
-    description: '',
+    project_name: '',
+    id_client: '',
   });
 
-  const filteredProjects = projects.filter(project =>
-    project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.clients?.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const getClientName = (clientId: string) => {
+    return clients.find(c => c.second_id_client === clientId)?.client_name || 'Sin cliente';
+  };
+
+  const filteredProjects = projects.filter(
+    project =>
+      project.project_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getClientName(project.id_client).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.client_id) {
+    if (!formData.project_name || !formData.id_client) {
       toast.error('Por favor completa los campos obligatorios');
       return;
     }
@@ -56,18 +59,18 @@ export default function Projects() {
       if (editingProject) {
         await updateProject.mutateAsync({
           id: editingProject,
-          updates: formData,
+          updates: { project_name: formData.project_name, id_client: formData.id_client },
         });
         toast.success('Proyecto actualizado');
       } else {
         await createProject.mutateAsync({
-          ...formData,
-          is_active: true,
+          project_name: formData.project_name,
+          id_client: formData.id_client,
         });
         toast.success('Proyecto creado');
       }
 
-      setFormData({ name: '', client_id: '', description: '' });
+      setFormData({ project_name: '', id_client: '' });
       setEditingProject(null);
       setIsDialogOpen(false);
     } catch (error) {
@@ -76,12 +79,11 @@ export default function Projects() {
   };
 
   const handleEdit = (projectId: string) => {
-    const project = projects.find(p => p.id === projectId);
+    const project = projects.find(p => p.id_project === projectId);
     if (project) {
       setFormData({
-        name: project.name,
-        client_id: project.client_id,
-        description: project.description || '',
+        project_name: project.project_name,
+        id_client: project.id_client,
       });
       setEditingProject(projectId);
       setIsDialogOpen(true);
@@ -92,7 +94,7 @@ export default function Projects() {
     try {
       await updateProject.mutateAsync({
         id: projectId,
-        updates: { is_active: !isActive },
+        updates: { active: !isActive },
       });
       toast.success(isActive ? 'Proyecto desactivado' : 'Proyecto activado');
     } catch (error) {
@@ -117,7 +119,13 @@ export default function Projects() {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2" onClick={() => { setEditingProject(null); setFormData({ name: '', client_id: '', description: '' }); }}>
+            <Button
+              className="gap-2"
+              onClick={() => {
+                setEditingProject(null);
+                setFormData({ project_name: '', id_client: '' });
+              }}
+            >
               <Plus className="h-4 w-4" />
               Nuevo Proyecto
             </Button>
@@ -134,38 +142,34 @@ export default function Projects() {
                 <Label htmlFor="name">Nombre del proyecto *</Label>
                 <Input
                   id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  value={formData.project_name}
+                  onChange={(e) => setFormData({ ...formData, project_name: e.target.value })}
                   placeholder="Ej: Portal Web Corporativo"
                 />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="client">Cliente *</Label>
-                <Select value={formData.client_id} onValueChange={(value) => setFormData({ ...formData, client_id: value })}>
+                <Select
+                  value={formData.id_client}
+                  onValueChange={(value) => setFormData({ ...formData, id_client: value })}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar cliente" />
                   </SelectTrigger>
                   <SelectContent>
                     {clients.map(client => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
+                      <SelectItem key={client.second_id_client} value={client.second_id_client}>
+                        {client.client_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="description">Descripción</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Descripción del proyecto..."
-                />
-              </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Cancelar
+              </Button>
               <Button onClick={handleSubmit}>{editingProject ? 'Guardar' : 'Crear'}</Button>
             </DialogFooter>
           </DialogContent>
@@ -184,40 +188,41 @@ export default function Projects() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filteredProjects.map(project => (
-          <Card key={project.id} className="card-elevated group transition-all hover:shadow-lg">
+          <Card key={project.id_project} className="card-elevated group transition-all hover:shadow-lg">
             <CardHeader className="flex flex-row items-start justify-between pb-2">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <Briefcase className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg">{project.name}</CardTitle>
-                  <p className="text-sm text-muted-foreground">{project.clients?.name || 'Sin cliente'}</p>
+                  <CardTitle className="text-lg">{project.project_name}</CardTitle>
+                  <p className="text-sm text-muted-foreground">{getClientName(project.id_client)}</p>
                 </div>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleEdit(project.id)}>
+                  <DropdownMenuItem onClick={() => handleEdit(project.id_project)}>
                     <Edit className="h-4 w-4 mr-2" />
                     Editar
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleToggleActive(project.id, project.is_active)}>
-                    {project.is_active ? 'Desactivar' : 'Activar'}
+                  <DropdownMenuItem onClick={() => handleToggleActive(project.id_project, project.active)}>
+                    {project.active ? 'Desactivar' : 'Activar'}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </CardHeader>
             <CardContent>
-              {project.description && (
-                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{project.description}</p>
-              )}
-              <Badge variant={project.is_active ? 'default' : 'secondary'}>
-                {project.is_active ? 'Activo' : 'Inactivo'}
+              <Badge variant={project.active ? 'default' : 'secondary'}>
+                {project.active ? 'Activo' : 'Inactivo'}
               </Badge>
             </CardContent>
           </Card>

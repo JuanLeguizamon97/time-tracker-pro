@@ -32,7 +32,7 @@ const employeeNavigationItems = [
 
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
-  const { isAdmin, profile, signOut } = useAuth();
+  const { isAdmin, employee, signOut } = useAuth();
   const isCollapsed = state === 'collapsed';
 
   const navigationItems = isAdmin ? adminNavigationItems : employeeNavigationItems;
@@ -83,9 +83,9 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-2 space-y-2">
-        {!isCollapsed && profile && (
+        {!isCollapsed && employee && (
           <div className="px-3 py-2 text-sm text-sidebar-muted">
-            <p className="font-medium text-sidebar-foreground">{profile.name}</p>
+            <p className="font-medium text-sidebar-foreground">{employee.employee_name}</p>
             <p className="text-xs">{isAdmin ? 'Administrador' : 'Empleado'}</p>
           </div>
         )}

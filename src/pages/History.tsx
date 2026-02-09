@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export default function History() {
-  const { user } = useAuth();
+  const { employee } = useAuth();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const monthStart = startOfMonth(selectedDate);
@@ -24,38 +24,40 @@ export default function History() {
   const { data: monthEntries = [], isLoading } = useTimeEntriesByDateRange(
     monthStart,
     monthEnd,
-    user?.id
+    employee?.id_employee
   );
 
   const sortedEntries = useMemo(() => {
-    return [...monthEntries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return [...monthEntries].sort(
+      (a, b) => new Date(b.week_start).getTime() - new Date(a.week_start).getTime()
+    );
   }, [monthEntries]);
 
-  const totalHours = monthEntries.reduce((sum, entry) => sum + Number(entry.hours), 0);
+  const totalHours = monthEntries.reduce((sum, entry) => sum + Number(entry.total_hours), 0);
 
   const projectStats = useMemo(() => {
     const stats: Record<string, { hours: number; projectName: string; clientName: string }> = {};
     monthEntries.forEach(entry => {
-      if (!stats[entry.project_id]) {
-        const project = projects.find(p => p.id === entry.project_id);
-        const client = clients.find(c => c.id === project?.client_id);
-        stats[entry.project_id] = {
+      if (!stats[entry.id_project]) {
+        const project = projects.find(p => p.id_project === entry.id_project);
+        const client = clients.find(c => c.second_id_client === entry.id_client);
+        stats[entry.id_project] = {
           hours: 0,
-          projectName: project?.name || 'Sin proyecto',
-          clientName: client?.name || 'Sin cliente',
+          projectName: project?.project_name || 'Sin proyecto',
+          clientName: client?.client_name || 'Sin cliente',
         };
       }
-      stats[entry.project_id].hours += Number(entry.hours);
+      stats[entry.id_project].hours += Number(entry.total_hours);
     });
     return Object.entries(stats).sort((a, b) => b[1].hours - a[1].hours);
   }, [monthEntries, projects, clients]);
 
   const navigateMonth = (direction: 'prev' | 'next') => {
-    setSelectedDate(prev => direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1));
+    setSelectedDate(prev => (direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)));
   };
 
   const getProjectName = (projectId: string) => {
-    return projects.find(p => p.id === projectId)?.name || 'Sin proyecto';
+    return projects.find(p => p.id_project === projectId)?.project_name || 'Sin proyecto';
   };
 
   if (isLoading) {
@@ -180,17 +182,21 @@ export default function History() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="table-header">Fecha</TableHead>
+                    <TableHead className="table-header">Semana</TableHead>
                     <TableHead className="table-header">Proyecto</TableHead>
                     <TableHead className="table-header text-right">Horas</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedEntries.map(entry => (
-                    <TableRow key={entry.id}>
-                      <TableCell>{format(new Date(entry.date), 'd MMM', { locale: es })}</TableCell>
-                      <TableCell>{getProjectName(entry.project_id)}</TableCell>
-                      <TableCell className="text-right font-medium">{entry.hours}h</TableCell>
+                    <TableRow key={entry.id_hours}>
+                      <TableCell>
+                        {format(new Date(entry.week_start), "d MMM", { locale: es })}
+                      </TableCell>
+                      <TableCell>{getProjectName(entry.id_project)}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {Number(entry.total_hours)}h
+                      </TableCell>
                     </TableRow>
                   ))}
                   {sortedEntries.length === 0 && (

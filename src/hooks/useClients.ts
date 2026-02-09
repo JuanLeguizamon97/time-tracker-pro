@@ -1,51 +1,27 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import { Client } from '@/types';
 
 export function useClients() {
   return useQuery({
     queryKey: ['clients'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .order('name');
-      
-      if (error) throw error;
-      return data as Client[];
-    },
+    queryFn: () => api.get<Client[]>('/clients/'),
   });
 }
 
 export function useActiveClients() {
   return useQuery({
     queryKey: ['clients', 'active'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      
-      if (error) throw error;
-      return data as Client[];
-    },
+    queryFn: () => api.get<Client[]>('/clients/?active=true'),
   });
 }
 
 export function useCreateClient() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: async (client: Omit<Client, 'id' | 'created_at'>) => {
-      const { data, error } = await supabase
-        .from('clients')
-        .insert(client)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
+    mutationFn: async (client: { client_name: string; contact_email?: string; contact_phone?: string }) => {
+      return api.post<Client>('/clients/', client);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -55,18 +31,18 @@ export function useCreateClient() {
 
 export function useUpdateClient() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Client> }) => {
-      const { data, error } = await supabase
-        .from('clients')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
+    mutationFn: async ({
+      primaryId,
+      secondId,
+      updates,
+    }: {
+      primaryId: string;
+      secondId: string;
+      updates: Partial<Client>;
+    }) => {
+      return api.put<Client>(`/clients/${primaryId}/${secondId}`, updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });

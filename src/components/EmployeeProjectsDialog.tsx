@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Loader2, FolderKanban } from 'lucide-react';
 import { useActiveProjects } from '@/hooks/useProjects';
-import { useEmployeeProjects, useBulkAssignProjects } from '@/hooks/useEmployeeProjects';
-import { useAuth } from '@/contexts/AuthContext';
-import { Profile } from '@/types';
+import { useClients } from '@/hooks/useClients';
+import { useAssignedProjects, useBulkAssignProjects } from '@/hooks/useAssignedProjects';
+import { Employee } from '@/types';
 import {
   Dialog,
   DialogContent,
@@ -20,42 +20,51 @@ import { toast } from 'sonner';
 interface EmployeeProjectsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  employee: Profile | null;
+  employee: Employee | null;
 }
 
 export function EmployeeProjectsDialog({ open, onOpenChange, employee }: EmployeeProjectsDialogProps) {
-  const { user } = useAuth();
   const { data: projects = [], isLoading: projectsLoading } = useActiveProjects();
-  const { data: employeeProjects = [], isLoading: assignmentsLoading } = useEmployeeProjects();
+  const { data: clients = [] } = useClients();
+  const { data: assignments = [], isLoading: assignmentsLoading } = useAssignedProjects();
   const bulkAssign = useBulkAssignProjects();
-  
+
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
 
   useEffect(() => {
-    if (employee && employeeProjects.length >= 0) {
-      const assigned = employeeProjects
-        .filter(ep => ep.user_id === employee.user_id)
-        .map(ep => ep.project_id);
+    if (employee) {
+      const assigned = assignments
+        .filter(a => a.employee_id === employee.id_employee)
+        .map(a => a.project_id);
       setSelectedProjects(assigned);
     }
-  }, [employee, employeeProjects]);
+  }, [employee, assignments]);
 
   const handleToggleProject = (projectId: string) => {
     setSelectedProjects(prev =>
-      prev.includes(projectId)
-        ? prev.filter(id => id !== projectId)
-        : [...prev, projectId]
+      prev.includes(projectId) ? prev.filter(id => id !== projectId) : [...prev, projectId]
     );
   };
 
+  const getClientName = (clientId: string) => {
+    return clients.find(c => c.second_id_client === clientId)?.client_name || '';
+  };
+
   const handleSave = async () => {
-    if (!employee || !user) return;
+    if (!employee) return;
 
     try {
+      const assignmentItems = selectedProjects.map(projectId => {
+        const project = projects.find(p => p.id_project === projectId);
+        return {
+          project_id: projectId,
+          client_id: project?.id_client || '',
+        };
+      });
+
       await bulkAssign.mutateAsync({
-        userId: employee.user_id,
-        projectIds: selectedProjects,
-        assignedBy: user.id,
+        employeeId: employee.id_employee,
+        assignments: assignmentItems,
       });
       toast.success('Proyectos asignados correctamente');
       onOpenChange(false);
@@ -76,7 +85,7 @@ export function EmployeeProjectsDialog({ open, onOpenChange, employee }: Employe
             Asignar Proyectos
           </DialogTitle>
           <DialogDescription>
-            Selecciona los proyectos para {employee?.name}
+            Selecciona los proyectos para {employee?.employee_name}
           </DialogDescription>
         </DialogHeader>
 
@@ -92,17 +101,20 @@ export function EmployeeProjectsDialog({ open, onOpenChange, employee }: Employe
               </p>
             ) : (
               projects.map(project => (
-                <div key={project.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50">
+                <div
+                  key={project.id_project}
+                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50"
+                >
                   <Checkbox
-                    id={project.id}
-                    checked={selectedProjects.includes(project.id)}
-                    onCheckedChange={() => handleToggleProject(project.id)}
+                    id={project.id_project}
+                    checked={selectedProjects.includes(project.id_project)}
+                    onCheckedChange={() => handleToggleProject(project.id_project)}
                   />
-                  <Label htmlFor={project.id} className="flex-1 cursor-pointer">
-                    <span className="font-medium">{project.name}</span>
-                    {project.clients && (
-                      <p className="text-xs text-muted-foreground">{project.clients.name}</p>
-                    )}
+                  <Label htmlFor={project.id_project} className="flex-1 cursor-pointer">
+                    <span className="font-medium">{project.project_name}</span>
+                    <p className="text-xs text-muted-foreground">
+                      {getClientName(project.id_client)}
+                    </p>
                   </Label>
                 </div>
               ))

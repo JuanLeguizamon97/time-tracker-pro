@@ -2,10 +2,10 @@ import { useState, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { CalendarIcon, ChevronLeft, ChevronRight, FileText, DollarSign, Users, Briefcase, Loader2 } from 'lucide-react';
-import { useProfiles } from '@/hooks/useProfiles';
+import { useEmployees } from '@/hooks/useEmployees';
 import { useClients } from '@/hooks/useClients';
 import { useProjects } from '@/hooks/useProjects';
-import { useTimeEntriesByDateRange } from '@/hooks/useTimeEntries';
+import { useAllTimeEntriesByDateRange } from '@/hooks/useTimeEntries';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
@@ -20,74 +20,80 @@ export default function Billing() {
   const monthStart = startOfMonth(selectedDate);
   const monthEnd = endOfMonth(selectedDate);
 
-  const { data: profiles = [] } = useProfiles();
+  const { data: employees = [] } = useEmployees();
   const { data: clients = [] } = useClients();
   const { data: projects = [] } = useProjects();
-  const { data: timeEntries = [], isLoading } = useTimeEntriesByDateRange(monthStart, monthEnd);
+  const { data: timeEntries = [], isLoading } = useAllTimeEntriesByDateRange(monthStart, monthEnd);
 
   const billingByProject = useMemo(() => {
-    const projectBilling: Record<string, {
-      projectName: string;
-      clientName: string;
-      employeeDetails: { name: string; hours: number; rate: number; total: number }[];
-      totalHours: number;
-      totalAmount: number;
-    }> = {};
+    const projectBilling: Record<
+      string,
+      {
+        projectName: string;
+        clientName: string;
+        employeeDetails: { name: string; hours: number; rate: number; total: number }[];
+        totalHours: number;
+        totalAmount: number;
+      }
+    > = {};
 
     timeEntries.forEach(entry => {
-      const project = projects.find(p => p.id === entry.project_id);
-      const client = clients.find(c => c.id === project?.client_id);
-      const profile = profiles.find(p => p.user_id === entry.user_id);
+      const project = projects.find(p => p.id_project === entry.id_project);
+      const client = clients.find(c => c.second_id_client === entry.id_client);
+      const emp = employees.find(e => e.id_employee === entry.id_employee);
 
-      if (!project || !profile) return;
+      if (!project || !emp) return;
 
-      if (!projectBilling[entry.project_id]) {
-        projectBilling[entry.project_id] = {
-          projectName: project.name,
-          clientName: client?.name || 'Sin cliente',
+      if (!projectBilling[entry.id_project]) {
+        projectBilling[entry.id_project] = {
+          projectName: project.project_name,
+          clientName: client?.client_name || 'Sin cliente',
           employeeDetails: [],
           totalHours: 0,
           totalAmount: 0,
         };
       }
 
-      const existingEmployee = projectBilling[entry.project_id].employeeDetails.find(
-        e => e.name === profile.name
+      const existingEmployee = projectBilling[entry.id_project].employeeDetails.find(
+        e => e.name === emp.employee_name
       );
 
-      const hours = Number(entry.hours);
-      const rate = Number(profile.hourly_rate);
+      const hours = Number(entry.total_hours);
+      const rate = Number(emp.hourly_rate) || 0;
 
       if (existingEmployee) {
         existingEmployee.hours += hours;
         existingEmployee.total = existingEmployee.hours * existingEmployee.rate;
       } else {
-        projectBilling[entry.project_id].employeeDetails.push({
-          name: profile.name,
-          hours: hours,
-          rate: rate,
+        projectBilling[entry.id_project].employeeDetails.push({
+          name: emp.employee_name,
+          hours,
+          rate,
           total: hours * rate,
         });
       }
 
-      projectBilling[entry.project_id].totalHours += hours;
-      projectBilling[entry.project_id].totalAmount += hours * rate;
+      projectBilling[entry.id_project].totalHours += hours;
+      projectBilling[entry.id_project].totalAmount += hours * rate;
     });
 
     return Object.entries(projectBilling).sort((a, b) => b[1].totalAmount - a[1].totalAmount);
-  }, [timeEntries, projects, clients, profiles]);
+  }, [timeEntries, projects, clients, employees]);
 
   const billingByClient = useMemo(() => {
-    const clientBilling: Record<string, {
-      clientName: string;
-      projects: { name: string; hours: number; amount: number }[];
-      totalHours: number;
-      totalAmount: number;
-    }> = {};
+    const clientBilling: Record<
+      string,
+      {
+        clientName: string;
+        projects: { name: string; hours: number; amount: number }[];
+        totalHours: number;
+        totalAmount: number;
+      }
+    > = {};
 
     billingByProject.forEach(([, projectData]) => {
-      const client = clients.find(c => c.name === projectData.clientName);
-      const clientId = client?.id || 'unknown';
+      const client = clients.find(c => c.client_name === projectData.clientName);
+      const clientId = client?.second_id_client || 'unknown';
 
       if (!clientBilling[clientId]) {
         clientBilling[clientId] = {
@@ -122,7 +128,7 @@ export default function Billing() {
   }, [billingByProject]);
 
   const navigateMonth = (direction: 'prev' | 'next') => {
-    setSelectedDate(prev => direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1));
+    setSelectedDate(prev => (direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)));
   };
 
   if (isLoading) {
@@ -177,7 +183,9 @@ export default function Billing() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Facturado</p>
-                <p className="text-2xl font-bold text-foreground">€{totals.amount.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-foreground">
+                  ${totals.amount.toLocaleString()}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -237,7 +245,9 @@ export default function Billing() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-primary">€{data.totalAmount.toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-primary">
+                      ${data.totalAmount.toLocaleString()}
+                    </p>
                     <p className="text-sm text-muted-foreground">{data.totalHours}h totales</p>
                   </div>
                 </div>
@@ -257,9 +267,9 @@ export default function Billing() {
                       <TableRow key={employee.name}>
                         <TableCell className="font-medium">{employee.name}</TableCell>
                         <TableCell className="text-right">{employee.hours}h</TableCell>
-                        <TableCell className="text-right">€{employee.rate}/h</TableCell>
+                        <TableCell className="text-right">${employee.rate}/h</TableCell>
                         <TableCell className="text-right font-semibold text-primary">
-                          €{employee.total.toLocaleString()}
+                          ${employee.total.toLocaleString()}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -292,7 +302,9 @@ export default function Billing() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-primary">€{data.totalAmount.toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-primary">
+                      ${data.totalAmount.toLocaleString()}
+                    </p>
                     <p className="text-sm text-muted-foreground">{data.totalHours}h totales</p>
                   </div>
                 </div>
@@ -300,14 +312,19 @@ export default function Billing() {
               <CardContent>
                 <div className="space-y-2">
                   {data.projects.map(project => (
-                    <div key={project.name} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                    <div
+                      key={project.name}
+                      className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                    >
                       <div className="flex items-center gap-2">
                         <Briefcase className="h-4 w-4 text-muted-foreground" />
                         <span className="font-medium">{project.name}</span>
                       </div>
                       <div className="flex items-center gap-4">
                         <Badge variant="outline">{project.hours}h</Badge>
-                        <span className="font-semibold text-primary">€{project.amount.toLocaleString()}</span>
+                        <span className="font-semibold text-primary">
+                          ${project.amount.toLocaleString()}
+                        </span>
                       </div>
                     </div>
                   ))}
