@@ -4,6 +4,8 @@ import { loginRequest } from '@/config/msalConfig';
 import { api } from '@/lib/api';
 import { Employee, AppRole } from '@/types';
 
+const AUTH_MODE = import.meta.env.VITE_AUTH_MODE || 'azure';
+
 interface AuthContextType {
   employee: Employee | null;
   role: AppRole;
@@ -17,7 +19,55 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+function MockAuthProvider({ children }: { children: ReactNode }) {
+  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [mockSignedIn, setMockSignedIn] = useState(true);
+
+  const fetchEmployee = useCallback(async () => {
+    try {
+      const data = await api.get<Employee>('/employees/me');
+      setEmployee(data);
+    } catch (err) {
+      console.error('Error fetching employee (mock mode):', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mockSignedIn) {
+      fetchEmployee();
+    }
+  }, [mockSignedIn, fetchEmployee]);
+
+  const role: AppRole = (employee?.role as AppRole) || 'employee';
+
+  return (
+    <AuthContext.Provider
+      value={{
+        employee,
+        role,
+        isLoading,
+        isAdmin: role === 'admin',
+        isAuthenticated: mockSignedIn && !!employee,
+        signIn: async () => {
+          setMockSignedIn(true);
+          await fetchEmployee();
+        },
+        signOut: async () => {
+          setEmployee(null);
+          setMockSignedIn(false);
+        },
+        refreshProfile: fetchEmployee,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+function AzureAuthProvider({ children }: { children: ReactNode }) {
   const { instance, accounts } = useMsal();
   const isAuthenticated = useIsAuthenticated();
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -70,6 +120,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  if (AUTH_MODE === 'mock') {
+    return <MockAuthProvider>{children}</MockAuthProvider>;
+  }
+  return <AzureAuthProvider>{children}</AzureAuthProvider>;
 }
 
 export function useAuth() {

@@ -1,6 +1,10 @@
 import { msalInstance, loginRequest } from '@/config/msalConfig';
 
-async function getAccessToken(): Promise<string> {
+const AUTH_MODE = import.meta.env.VITE_AUTH_MODE || 'azure';
+
+async function getAccessToken(): Promise<string | null> {
+  if (AUTH_MODE === 'mock') return null;
+
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length === 0) throw new Error('No authenticated account');
 
@@ -13,13 +17,17 @@ async function getAccessToken(): Promise<string> {
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = await getAccessToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...options.headers as Record<string, string>,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`/api${path}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
-    },
+    headers,
   });
 
   if (!response.ok) {
