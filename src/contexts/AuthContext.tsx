@@ -1,10 +1,5 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import { useMsal, useIsAuthenticated } from '@azure/msal-react';
-import { loginRequest } from '@/config/msalConfig';
-import { api } from '@/lib/api';
+import { createContext, useContext, ReactNode } from 'react';
 import { Employee, AppRole } from '@/types';
-
-const AUTH_MODE = import.meta.env.VITE_AUTH_MODE || 'azure';
 
 interface AuthContextType {
   employee: Employee | null;
@@ -19,114 +14,33 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function MockAuthProvider({ children }: { children: ReactNode }) {
-  const [employee, setEmployee] = useState<Employee | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [mockSignedIn, setMockSignedIn] = useState(true);
-
-  const fetchEmployee = useCallback(async () => {
-    try {
-      const data = await api.get<Employee>('/employees/me');
-      setEmployee(data);
-    } catch (err) {
-      console.error('Error fetching employee (mock mode):', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (mockSignedIn) {
-      fetchEmployee();
-    }
-  }, [mockSignedIn, fetchEmployee]);
-
-  const role: AppRole = (employee?.role as AppRole) || 'employee';
-
-  return (
-    <AuthContext.Provider
-      value={{
-        employee,
-        role,
-        isLoading,
-        isAdmin: role === 'admin',
-        isAuthenticated: mockSignedIn && !!employee,
-        signIn: async () => {
-          setMockSignedIn(true);
-          await fetchEmployee();
-        },
-        signOut: async () => {
-          setEmployee(null);
-          setMockSignedIn(false);
-        },
-        refreshProfile: fetchEmployee,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-function AzureAuthProvider({ children }: { children: ReactNode }) {
-  const { instance, accounts } = useMsal();
-  const isAuthenticated = useIsAuthenticated();
-  const [employee, setEmployee] = useState<Employee | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const fetchEmployee = useCallback(async () => {
-    try {
-      const data = await api.get<Employee>('/employees/me');
-      setEmployee(data);
-    } catch (err) {
-      console.error('Error fetching employee:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isAuthenticated && accounts.length > 0) {
-      fetchEmployee();
-    } else {
-      setEmployee(null);
-      setIsLoading(false);
-    }
-  }, [isAuthenticated, accounts, fetchEmployee]);
-
-  const signIn = async () => {
-    await instance.loginPopup(loginRequest);
-  };
-
-  const signOut = async () => {
-    await instance.logoutPopup();
-    setEmployee(null);
-  };
-
-  const role: AppRole = (employee?.role as AppRole) || 'employee';
-
-  return (
-    <AuthContext.Provider
-      value={{
-        employee,
-        role,
-        isLoading,
-        isAdmin: role === 'admin',
-        isAuthenticated,
-        signIn,
-        signOut,
-        refreshProfile: fetchEmployee,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
+const mockEmployee: Employee = {
+  id_employee: 'admin-001',
+  employee_name: 'Administrador',
+  employee_email: 'admin@timetrack.com',
+  home_state: null,
+  home_country: null,
+  role: 'admin',
+  hourly_rate: null,
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  if (AUTH_MODE === 'mock') {
-    return <MockAuthProvider>{children}</MockAuthProvider>;
-  }
-  return <AzureAuthProvider>{children}</AzureAuthProvider>;
+  const value: AuthContextType = {
+    employee: mockEmployee,
+    role: 'admin',
+    isLoading: false,
+    isAdmin: true,
+    isAuthenticated: true,
+    signIn: async () => {},
+    signOut: async () => {},
+    refreshProfile: async () => {},
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
