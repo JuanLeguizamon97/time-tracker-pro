@@ -7,25 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 
@@ -37,100 +24,64 @@ export default function Clients() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState<{ primaryId: string; secondId: string } | null>(null);
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
-  const [formData, setFormData] = useState({
-    client_name: '',
-    contact_email: '',
-    contact_phone: '',
-  });
+  const [formData, setFormData] = useState({ name: '', email: '', phone: '' });
 
   const filteredClients = clients.filter(
     client =>
-      client.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (client.contact_email?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
+      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
   );
 
-  const getProjectsByClient = (clientId: string) => {
-    return projects.filter(p => p.id_client === clientId);
-  };
+  const getProjectsByClient = (clientId: string) => projects.filter(p => p.client_id === clientId);
 
   const toggleExpanded = (clientId: string) => {
     setExpandedClients(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(clientId)) {
-        newSet.delete(clientId);
-      } else {
-        newSet.add(clientId);
-      }
+      newSet.has(clientId) ? newSet.delete(clientId) : newSet.add(clientId);
       return newSet;
     });
   };
 
   const handleSubmit = async () => {
-    if (!formData.client_name) {
-      toast.error('Por favor completa los campos obligatorios');
-      return;
-    }
-
+    if (!formData.name) { toast.error('Por favor completa los campos obligatorios'); return; }
     try {
-      if (editingClient) {
+      if (editingClientId) {
         await updateClient.mutateAsync({
-          primaryId: editingClient.primaryId,
-          secondId: editingClient.secondId,
-          updates: {
-            client_name: formData.client_name,
-            contact_email: formData.contact_email || null,
-            contact_phone: formData.contact_phone || null,
-          },
+          id: editingClientId,
+          updates: { name: formData.name, email: formData.email || null, phone: formData.phone || null },
         });
         toast.success('Cliente actualizado');
       } else {
         await createClient.mutateAsync({
-          client_name: formData.client_name,
-          contact_email: formData.contact_email || undefined,
-          contact_phone: formData.contact_phone || undefined,
+          name: formData.name,
+          email: formData.email || undefined,
+          phone: formData.phone || undefined,
         });
         toast.success('Cliente creado');
       }
-
-      setFormData({ client_name: '', contact_email: '', contact_phone: '' });
-      setEditingClient(null);
+      setFormData({ name: '', email: '', phone: '' });
+      setEditingClientId(null);
       setIsDialogOpen(false);
-    } catch (error) {
-      toast.error('Error al guardar el cliente');
-    }
+    } catch { toast.error('Error al guardar el cliente'); }
   };
 
   const handleEdit = (client: typeof clients[0]) => {
-    setFormData({
-      client_name: client.client_name,
-      contact_email: client.contact_email || '',
-      contact_phone: client.contact_phone || '',
-    });
-    setEditingClient({ primaryId: client.primary_id_client, secondId: client.second_id_client });
+    setFormData({ name: client.name, email: client.email || '', phone: client.phone || '' });
+    setEditingClientId(client.id);
     setIsDialogOpen(true);
   };
 
   const handleToggleActive = async (client: typeof clients[0]) => {
     try {
-      await updateClient.mutateAsync({
-        primaryId: client.primary_id_client,
-        secondId: client.second_id_client,
-        updates: { active: !client.active },
-      });
-      toast.success(client.active ? 'Cliente desactivado' : 'Cliente activado');
-    } catch (error) {
-      toast.error('Error al actualizar el cliente');
-    }
+      await updateClient.mutateAsync({ id: client.id, updates: { is_active: !client.is_active } });
+      toast.success(client.is_active ? 'Cliente desactivado' : 'Cliente activado');
+    } catch { toast.error('Error al actualizar el cliente'); }
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return (<div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>);
   }
 
   return (
@@ -142,59 +93,32 @@ export default function Clients() {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button
-              className="gap-2"
-              onClick={() => {
-                setEditingClient(null);
-                setFormData({ client_name: '', contact_email: '', contact_phone: '' });
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Nuevo Cliente
+            <Button className="gap-2" onClick={() => { setEditingClientId(null); setFormData({ name: '', email: '', phone: '' }); }}>
+              <Plus className="h-4 w-4" /> Nuevo Cliente
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editingClient ? 'Editar Cliente' : 'Nuevo Cliente'}</DialogTitle>
-              <DialogDescription>
-                {editingClient ? 'Modifica los datos del cliente' : 'Añade un nuevo cliente a la empresa'}
-              </DialogDescription>
+              <DialogTitle>{editingClientId ? 'Editar Cliente' : 'Nuevo Cliente'}</DialogTitle>
+              <DialogDescription>{editingClientId ? 'Modifica los datos del cliente' : 'Añade un nuevo cliente a la empresa'}</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="name">Nombre *</Label>
-                <Input
-                  id="name"
-                  value={formData.client_name}
-                  onChange={(e) => setFormData({ ...formData, client_name: e.target.value })}
-                  placeholder="Ej: TechCorp S.A."
-                />
+                <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Ej: TechCorp S.A." />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.contact_email}
-                  onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-                  placeholder="contacto@empresa.com"
-                />
+                <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="contacto@empresa.com" />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="phone">Teléfono</Label>
-                <Input
-                  id="phone"
-                  value={formData.contact_phone}
-                  onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-                  placeholder="+34 912 345 678"
-                />
+                <Input id="phone" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+34 912 345 678" />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={handleSubmit}>{editingClient ? 'Guardar' : 'Crear'}</Button>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleSubmit}>{editingClientId ? 'Guardar' : 'Crear'}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -202,66 +126,40 @@ export default function Clients() {
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Buscar clientes..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
+        <Input placeholder="Buscar clientes..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
       </div>
 
       <div className="space-y-4">
         {filteredClients.map(client => {
-          const clientProjects = getProjectsByClient(client.second_id_client);
-          const isExpanded = expandedClients.has(client.second_id_client);
-
+          const clientProjects = getProjectsByClient(client.id);
+          const isExpanded = expandedClients.has(client.id);
           return (
-            <Card key={client.second_id_client} className="card-elevated">
-              <Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(client.second_id_client)}>
+            <Card key={client.id} className="card-elevated">
+              <Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(client.id)}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <CollapsibleTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
+                          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </Button>
                       </CollapsibleTrigger>
                       <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
                         <Users className="h-6 w-6 text-primary" />
                       </div>
                       <div>
-                        <CardTitle className="text-lg">{client.client_name}</CardTitle>
-                        <p className="text-sm text-muted-foreground">
-                          {client.contact_email || 'Sin email'}
-                        </p>
+                        <CardTitle className="text-lg">{client.name}</CardTitle>
+                        <p className="text-sm text-muted-foreground">{client.email || 'Sin email'}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="gap-1">
-                        <Briefcase className="h-3 w-3" />
-                        {clientProjects.length} proyectos
-                      </Badge>
-                      <Badge variant={client.active ? 'default' : 'secondary'}>
-                        {client.active ? 'Activo' : 'Inactivo'}
-                      </Badge>
+                      <Badge variant="outline" className="gap-1"><Briefcase className="h-3 w-3" />{clientProjects.length} proyectos</Badge>
+                      <Badge variant={client.is_active ? 'default' : 'secondary'}>{client.is_active ? 'Activo' : 'Inactivo'}</Badge>
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
+                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEdit(client)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleToggleActive(client)}>
-                            {client.active ? 'Desactivar' : 'Activar'}
-                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEdit(client)}><Edit className="h-4 w-4 mr-2" />Editar</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleToggleActive(client)}>{client.is_active ? 'Desactivar' : 'Activar'}</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -270,23 +168,15 @@ export default function Clients() {
                 <CollapsibleContent>
                   <CardContent className="pt-0">
                     <div className="ml-14 mt-2 space-y-2">
-                      <p className="text-sm font-medium text-muted-foreground mb-3">
-                        Proyectos asociados:
-                      </p>
+                      <p className="text-sm font-medium text-muted-foreground mb-3">Proyectos asociados:</p>
                       {clientProjects.length > 0 ? (
                         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                           {clientProjects.map(project => (
-                            <div
-                              key={project.id_project}
-                              className="flex items-center gap-2 p-3 bg-muted/30 rounded-lg"
-                            >
+                            <div key={project.id} className="flex items-center gap-2 p-3 bg-muted/30 rounded-lg">
                               <Briefcase className="h-4 w-4 text-primary" />
-                              <span className="font-medium text-sm">{project.project_name}</span>
-                              <Badge
-                                variant={project.active ? 'default' : 'secondary'}
-                                className="ml-auto text-xs"
-                              >
-                                {project.active ? 'Activo' : 'Inactivo'}
+                              <span className="font-medium text-sm">{project.name}</span>
+                              <Badge variant={project.is_active ? 'default' : 'secondary'} className="ml-auto text-xs">
+                                {project.is_active ? 'Activo' : 'Inactivo'}
                               </Badge>
                             </div>
                           ))}

@@ -85,7 +85,7 @@ export function AppSidebar() {
       <SidebarFooter className="p-2 space-y-2">
         {!isCollapsed && employee && (
           <div className="px-3 py-2 text-sm text-sidebar-muted">
-            <p className="font-medium text-sidebar-foreground">{employee.employee_name}</p>
+            <p className="font-medium text-sidebar-foreground">{employee.name}</p>
             <p className="text-xs">{isAdmin ? 'Administrador' : 'Empleado'}</p>
           </div>
         )}
