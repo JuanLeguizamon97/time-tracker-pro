@@ -1,18 +1,33 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { supabase } from '@/integrations/supabase/client';
 import { Project } from '@/types';
 
 export function useProjects() {
   return useQuery({
     queryKey: ['projects'],
-    queryFn: () => api.get<Project[]>('/projects/'),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      return data as Project[];
+    },
   });
 }
 
 export function useActiveProjects() {
   return useQuery({
     queryKey: ['projects', 'active'],
-    queryFn: () => api.get<Project[]>('/projects/?active=true'),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data as Project[];
+    },
   });
 }
 
@@ -20,8 +35,14 @@ export function useCreateProject() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (project: { project_name: string; id_client: string; billable_default?: boolean; hourly_rate?: number }) => {
-      return api.post<Project>('/projects/', project);
+    mutationFn: async (project: { name: string; client_id: string; description?: string }) => {
+      const { data, error } = await supabase
+        .from('projects')
+        .insert(project)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as Project;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -34,7 +55,14 @@ export function useUpdateProject() {
 
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Project> }) => {
-      return api.put<Project>(`/projects/${id}`, updates);
+      const { data, error } = await supabase
+        .from('projects')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as Project;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });

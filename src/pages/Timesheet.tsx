@@ -32,89 +32,52 @@ export default function Timesheet() {
 
   const { data: allProjects = [], isLoading: projectsLoading } = useActiveProjects();
   const { data: clients = [] } = useClients();
-  const { data: assignedProjects = [], isLoading: assignmentsLoading } = useAssignedProjectsWithDetails(
-    employee?.id_employee
-  );
-  const { data: weekEntries = [], isLoading: entriesLoading } = useTimeEntriesByWeek(
-    weekStart,
-    employee?.id_employee
-  );
+  const { data: assignedProjects = [], isLoading: assignmentsLoading } = useAssignedProjectsWithDetails(employee?.user_id);
+  const { data: weekEntries = [], isLoading: entriesLoading } = useTimeEntriesByWeek(weekStart, employee?.user_id);
 
   const createTimeEntry = useCreateTimeEntry();
   const updateTimeEntry = useUpdateTimeEntry();
   const deleteTimeEntry = useDeleteTimeEntry();
 
-  // Build the list of projects based on role
   const projects: ProjectRow[] = isAdmin
     ? allProjects.map(p => {
-        const client = clients.find(c => c.second_id_client === p.id_client);
-        return {
-          projectId: p.id_project,
-          clientId: p.id_client,
-          projectName: p.project_name,
-          clientName: client?.client_name || '',
-        };
+        const client = clients.find(c => c.id === p.client_id);
+        return { projectId: p.id, clientId: p.client_id, projectName: p.name, clientName: client?.name || '' };
       })
-    : assignedProjects.map(ap => ({
-        projectId: ap.project_id,
-        clientId: ap.client_id,
-        projectName: ap.project_name,
-        clientName: ap.client_name,
-      }));
+    : assignedProjects.map(ap => ({ projectId: ap.project_id, clientId: ap.client_id, projectName: ap.project_name, clientName: ap.client_name }));
 
-  const getExistingEntry = (projectId: string): TimeEntry | undefined => {
-    return weekEntries.find(e => e.id_project === projectId);
-  };
+  const getExistingEntry = (projectId: string): TimeEntry | undefined => weekEntries.find(e => e.project_id === projectId);
 
   const getHoursForProject = (projectId: string): number => {
     if (editedHours[projectId] !== undefined) return editedHours[projectId];
     const entry = getExistingEntry(projectId);
-    return entry ? Number(entry.total_hours) : 0;
+    return entry ? Number(entry.hours) : 0;
   };
 
-  const handleHoursChange = (projectId: string, hours: number) => {
-    setEditedHours(prev => ({ ...prev, [projectId]: hours }));
-  };
+  const handleHoursChange = (projectId: string, hours: number) => { setEditedHours(prev => ({ ...prev, [projectId]: hours })); };
 
-  const getTotalWeek = (): number => {
-    return projects.reduce((sum, p) => sum + getHoursForProject(p.projectId), 0);
-  };
+  const getTotalWeek = (): number => projects.reduce((sum, p) => sum + getHoursForProject(p.projectId), 0);
 
   const handleSave = async () => {
     if (!employee) return;
-
     setIsSaving(true);
     try {
       const promises: Promise<unknown>[] = [];
-      const ws = format(weekStart, 'yyyy-MM-dd');
+      const dateStr = format(weekStart, 'yyyy-MM-dd');
 
       for (const [projectId, hours] of Object.entries(editedHours)) {
         const existing = getExistingEntry(projectId);
-        const project = projects.find(p => p.projectId === projectId);
-        if (!project) continue;
-
         if (existing && hours > 0) {
-          promises.push(
-            updateTimeEntry.mutateAsync({ id: existing.id_hours, updates: { total_hours: hours } })
-          );
+          promises.push(updateTimeEntry.mutateAsync({ id: existing.id, updates: { hours } }));
         } else if (existing && hours <= 0) {
-          promises.push(deleteTimeEntry.mutateAsync(existing.id_hours));
+          promises.push(deleteTimeEntry.mutateAsync(existing.id));
         } else if (!existing && hours > 0) {
-          promises.push(
-            createTimeEntry.mutateAsync({
-              id_employee: employee.id_employee,
-              id_project: project.projectId,
-              id_client: project.clientId,
-              week_start: ws,
-              total_hours: hours,
-              billable: true,
-              location_type: 'remote',
-              location_value: null,
-              is_split_month: false,
-              month_a_hours: null,
-              month_b_hours: null,
-            })
-          );
+          promises.push(createTimeEntry.mutateAsync({
+            user_id: employee.user_id,
+            project_id: projectId,
+            date: dateStr,
+            hours,
+          }));
         }
       }
 
@@ -124,9 +87,7 @@ export default function Timesheet() {
     } catch (error) {
       toast.error('Error al guardar las horas');
       console.error(error);
-    } finally {
-      setIsSaving(false);
-    }
+    } finally { setIsSaving(false); }
   };
 
   const navigateWeek = (direction: 'prev' | 'next') => {
@@ -137,11 +98,7 @@ export default function Timesheet() {
   const isLoading = projectsLoading || assignmentsLoading || entriesLoading;
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return (<div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>);
   }
 
   return (
@@ -152,11 +109,7 @@ export default function Timesheet() {
           <p className="text-muted-foreground">Registra las horas trabajadas por proyecto</p>
         </div>
         <Button onClick={handleSave} className="gap-2" disabled={isSaving || Object.keys(editedHours).length === 0}>
-          {isSaving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
+          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Guardar Cambios
         </Button>
       </div>
@@ -164,9 +117,7 @@ export default function Timesheet() {
       <Card className="card-elevated">
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={() => navigateWeek('prev')}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
+            <Button variant="outline" size="icon" onClick={() => navigateWeek('prev')}><ChevronLeft className="h-4 w-4" /></Button>
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="gap-2 min-w-[200px]">
@@ -175,18 +126,10 @@ export default function Timesheet() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => { if (date) { setSelectedDate(date); setEditedHours({}); } }}
-                  initialFocus
-                  className="pointer-events-auto"
-                />
+                <Calendar mode="single" selected={selectedDate} onSelect={(date) => { if (date) { setSelectedDate(date); setEditedHours({}); } }} initialFocus className="pointer-events-auto" />
               </PopoverContent>
             </Popover>
-            <Button variant="outline" size="icon" onClick={() => navigateWeek('next')}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            <Button variant="outline" size="icon" onClick={() => navigateWeek('next')}><ChevronRight className="h-4 w-4" /></Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -203,40 +146,20 @@ export default function Timesheet() {
                   <tr key={project.projectId} className="border-b hover:bg-muted/30 transition-colors">
                     <td className="py-3 px-2">
                       <span className="font-medium text-foreground">{project.projectName}</span>
-                      {project.clientName && (
-                        <p className="text-xs text-muted-foreground">{project.clientName}</p>
-                      )}
+                      {project.clientName && <p className="text-xs text-muted-foreground">{project.clientName}</p>}
                     </td>
                     <td className="py-3 px-2 text-center">
-                      <Input
-                        type="number"
-                        min="0"
-                        max="168"
-                        step="0.5"
-                        value={getHoursForProject(project.projectId) || ''}
-                        onChange={(e) =>
-                          handleHoursChange(project.projectId, parseFloat(e.target.value) || 0)
-                        }
-                        className="time-input w-24 mx-auto"
-                      />
+                      <Input type="number" min="0" max="168" step="0.5" value={getHoursForProject(project.projectId) || ''} onChange={(e) => handleHoursChange(project.projectId, parseFloat(e.target.value) || 0)} className="time-input w-24 mx-auto" />
                     </td>
                   </tr>
                 ))}
                 {projects.length === 0 && (
-                  <tr>
-                    <td colSpan={2} className="text-center py-8 text-muted-foreground">
-                      {isAdmin
-                        ? 'No hay proyectos activos disponibles'
-                        : 'No tienes proyectos asignados. Contacta a tu administrador.'}
-                    </td>
-                  </tr>
+                  <tr><td colSpan={2} className="text-center py-8 text-muted-foreground">{isAdmin ? 'No hay proyectos activos disponibles' : 'No tienes proyectos asignados. Contacta a tu administrador.'}</td></tr>
                 )}
                 {projects.length > 0 && (
                   <tr className="bg-muted/50">
                     <td className="py-3 px-2 font-semibold text-foreground">Total Semanal</td>
-                    <td className="py-3 px-2 text-center">
-                      <span className="font-bold text-lg text-primary">{getTotalWeek()}h</span>
-                    </td>
+                    <td className="py-3 px-2 text-center"><span className="font-bold text-lg text-primary">{getTotalWeek()}h</span></td>
                   </tr>
                 )}
               </tbody>

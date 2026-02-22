@@ -15,13 +15,15 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const mockEmployee: Employee = {
-  id_employee: 'admin-001',
-  employee_name: 'Administrador',
-  employee_email: 'admin@timetrack.com',
-  home_state: null,
-  home_country: null,
-  role: 'admin',
-  hourly_rate: null,
+  id: 'admin-001',
+  user_id: 'admin-001',
+  name: 'Administrador',
+  email: 'admin@timetrack.com',
+  hourly_rate: 0,
+  is_active: true,
+  supervisor_id: null,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {

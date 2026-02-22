@@ -34,7 +34,7 @@ export function EmployeeProjectsDialog({ open, onOpenChange, employee }: Employe
   useEffect(() => {
     if (employee) {
       const assigned = assignments
-        .filter(a => a.employee_id === employee.id_employee)
+        .filter(a => a.user_id === employee.user_id)
         .map(a => a.project_id);
       setSelectedProjects(assigned);
     }
@@ -47,23 +47,19 @@ export function EmployeeProjectsDialog({ open, onOpenChange, employee }: Employe
   };
 
   const getClientName = (clientId: string) => {
-    return clients.find(c => c.second_id_client === clientId)?.client_name || '';
+    return clients.find(c => c.id === clientId)?.name || '';
   };
 
   const handleSave = async () => {
     if (!employee) return;
 
     try {
-      const assignmentItems = selectedProjects.map(projectId => {
-        const project = projects.find(p => p.id_project === projectId);
-        return {
-          project_id: projectId,
-          client_id: project?.id_client || '',
-        };
-      });
+      const assignmentItems = selectedProjects.map(projectId => ({
+        project_id: projectId,
+      }));
 
       await bulkAssign.mutateAsync({
-        employeeId: employee.id_employee,
+        userId: employee.user_id,
         assignments: assignmentItems,
       });
       toast.success('Proyectos asignados correctamente');
@@ -85,7 +81,7 @@ export function EmployeeProjectsDialog({ open, onOpenChange, employee }: Employe
             Asignar Proyectos
           </DialogTitle>
           <DialogDescription>
-            Selecciona los proyectos para {employee?.employee_name}
+            Selecciona los proyectos para {employee?.name}
           </DialogDescription>
         </DialogHeader>
 
@@ -102,18 +98,18 @@ export function EmployeeProjectsDialog({ open, onOpenChange, employee }: Employe
             ) : (
               projects.map(project => (
                 <div
-                  key={project.id_project}
+                  key={project.id}
                   className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50"
                 >
                   <Checkbox
-                    id={project.id_project}
-                    checked={selectedProjects.includes(project.id_project)}
-                    onCheckedChange={() => handleToggleProject(project.id_project)}
+                    id={project.id}
+                    checked={selectedProjects.includes(project.id)}
+                    onCheckedChange={() => handleToggleProject(project.id)}
                   />
-                  <Label htmlFor={project.id_project} className="flex-1 cursor-pointer">
-                    <span className="font-medium">{project.project_name}</span>
+                  <Label htmlFor={project.id} className="flex-1 cursor-pointer">
+                    <span className="font-medium">{project.name}</span>
                     <p className="text-xs text-muted-foreground">
-                      {getClientName(project.id_client)}
+                      {getClientName(project.client_id)}
                     </p>
                   </Label>
                 </div>
