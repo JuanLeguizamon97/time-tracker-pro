@@ -15,7 +15,6 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { EmployeeProjectsDialog } from '@/components/EmployeeProjectsDialog';
@@ -63,13 +62,13 @@ export default function Employees() {
   const handleOpenProjects = (emp: Employee) => { setSelectedEmployee(emp); setIsProjectsDialogOpen(true); };
 
   const handleSubmit = async () => {
-    if (!formData.name || formData.hourly_rate < 0) { toast.error('Por favor completa todos los campos correctamente'); return; }
+    if (!formData.name || formData.hourly_rate < 0) { toast.error('Please fill in all fields correctly.'); return; }
     try {
       await updateEmployee.mutateAsync({ id: editingEmployeeId!, updates: { name: formData.name, hourly_rate: formData.hourly_rate } });
-      toast.success('Empleado actualizado');
+      toast.success("Saved — you're all set.");
       setIsDialogOpen(false);
       setEditingEmployeeId(null);
-    } catch { toast.error('Error al actualizar el empleado'); }
+    } catch { toast.error('Something went wrong. Please try again.'); }
   };
 
   if (isLoading) {
@@ -82,8 +81,8 @@ export default function Employees() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Empleados</h1>
-          <p className="text-muted-foreground">Gestiona empleados, tarifas, roles y asignaciones</p>
+          <h1 className="text-2xl font-bold text-foreground">Employees</h1>
+          <p className="text-muted-foreground">Manage team members, rates, roles, and assignments</p>
         </div>
       </div>
 
@@ -92,7 +91,7 @@ export default function Employees() {
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10"><UserCircle className="h-6 w-6 text-primary" /></div>
-              <div><p className="text-sm text-muted-foreground">Total Empleados</p><p className="text-2xl font-bold text-foreground">{employees.length}</p></div>
+              <div><p className="text-sm text-muted-foreground">Total Employees</p><p className="text-2xl font-bold text-foreground">{employees.length}</p></div>
             </div>
           </CardContent>
         </Card>
@@ -108,7 +107,7 @@ export default function Employees() {
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning/10"><DollarSign className="h-6 w-6 text-warning" /></div>
-              <div><p className="text-sm text-muted-foreground">Tarifa Media</p><p className="text-2xl font-bold text-foreground">${avgRate}/h</p></div>
+              <div><p className="text-sm text-muted-foreground">Avg. Rate</p><p className="text-2xl font-bold text-foreground">${avgRate}/h</p></div>
             </div>
           </CardContent>
         </Card>
@@ -116,22 +115,22 @@ export default function Employees() {
 
       <Card className="card-elevated">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Lista de Empleados</CardTitle>
+          <CardTitle>Team Members</CardTitle>
           <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Buscar empleados..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+            <Input placeholder="Search employees..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
           </div>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="table-header">Empleado</TableHead>
+                <TableHead className="table-header">Employee</TableHead>
                 <TableHead className="table-header">Email</TableHead>
-                <TableHead className="table-header">Tarifa/Hora</TableHead>
-                <TableHead className="table-header">Rol</TableHead>
-                <TableHead className="table-header">Proyectos</TableHead>
-                <TableHead className="table-header text-right">Acciones</TableHead>
+                <TableHead className="table-header">Rate/Hour</TableHead>
+                <TableHead className="table-header">Role</TableHead>
+                <TableHead className="table-header">Projects</TableHead>
+                <TableHead className="table-header text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -149,7 +148,7 @@ export default function Employees() {
                     <TableCell><span className="font-semibold text-primary">${Number(emp.hourly_rate) || 0}/h</span></TableCell>
                     <TableCell>
                       <Badge variant={role === 'admin' ? 'default' : 'outline'} className="gap-1">
-                        <Shield className="h-3 w-3" />{role === 'admin' ? 'Admin' : 'Empleado'}
+                        <Shield className="h-3 w-3" />{role === 'admin' ? 'Admin' : 'Employee'}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -159,8 +158,8 @@ export default function Employees() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEdit(emp)}><Edit className="h-4 w-4 mr-2" />Editar</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleOpenProjects(emp)}><FolderKanban className="h-4 w-4 mr-2" />Asignar Proyectos</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEdit(emp)}><Edit className="h-4 w-4 mr-2" />Edit</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenProjects(emp)}><FolderKanban className="h-4 w-4 mr-2" />Assign Projects</DropdownMenuItem>
                           <DropdownMenuSeparator />
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -171,7 +170,7 @@ export default function Employees() {
             </TableBody>
           </Table>
           {filteredEmployees.length === 0 && (
-            <div className="text-center py-12"><UserCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" /><p className="text-muted-foreground">No se encontraron empleados</p></div>
+            <div className="text-center py-12"><UserCircle className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" /><p className="text-muted-foreground">No employees found</p></div>
           )}
         </CardContent>
       </Card>
@@ -179,22 +178,22 @@ export default function Employees() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Editar Empleado</DialogTitle>
-            <DialogDescription>Modifica los datos y tarifa del empleado</DialogDescription>
+            <DialogTitle>Edit Employee</DialogTitle>
+            <DialogDescription>Update employee details and rate.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">Nombre</Label>
+              <Label htmlFor="name">Name</Label>
               <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="rate">Tarifa por hora ($)</Label>
+              <Label htmlFor="rate">Hourly rate ($)</Label>
               <Input id="rate" type="number" min="0" step="0.5" value={formData.hourly_rate || ''} onChange={(e) => setFormData({ ...formData, hourly_rate: parseFloat(e.target.value) || 0 })} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSubmit}>Guardar</Button>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSubmit}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

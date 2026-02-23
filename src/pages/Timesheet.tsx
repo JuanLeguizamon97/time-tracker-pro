@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { format, startOfWeek, addDays } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { CalendarIcon, ChevronLeft, ChevronRight, Save, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActiveProjects } from '@/hooks/useProjects';
@@ -83,9 +82,9 @@ export default function Timesheet() {
 
       await Promise.all(promises);
       setEditedHours({});
-      toast.success('Horas guardadas correctamente');
+      toast.success("Saved — you're all set.");
     } catch (error) {
-      toast.error('Error al guardar las horas');
+      toast.error('Something went wrong while saving. Please try again.');
       console.error(error);
     } finally { setIsSaving(false); }
   };
@@ -105,12 +104,12 @@ export default function Timesheet() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Registro Semanal</h1>
-          <p className="text-muted-foreground">Registra las horas trabajadas por proyecto</p>
+          <h1 className="text-2xl font-bold text-foreground">Weekly Time Log</h1>
+          <p className="text-muted-foreground">Log your hours by project — quick and easy</p>
         </div>
         <Button onClick={handleSave} className="gap-2" disabled={isSaving || Object.keys(editedHours).length === 0}>
           {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Guardar Cambios
+          Save Changes
         </Button>
       </div>
 
@@ -120,9 +119,9 @@ export default function Timesheet() {
             <Button variant="outline" size="icon" onClick={() => navigateWeek('prev')}><ChevronLeft className="h-4 w-4" /></Button>
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="gap-2 min-w-[200px]">
+                <Button variant="outline" className="gap-2 min-w-[220px]">
                   <CalendarIcon className="h-4 w-4" />
-                  {format(weekStart, "'Semana del' d 'de' MMMM", { locale: es })}
+                  Week of {format(weekStart, 'MMM d, yyyy')}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -137,13 +136,13 @@ export default function Timesheet() {
             <table className="w-full">
               <thead>
                 <tr className="border-b">
-                  <th className="table-header text-left py-3 px-2 min-w-[250px]">Proyecto</th>
-                  <th className="table-header text-center py-3 px-2 min-w-[120px]">Horas Totales</th>
+                  <th className="table-header text-left py-3 px-2 min-w-[250px]">Project</th>
+                  <th className="table-header text-center py-3 px-2 min-w-[120px]">Total Hours</th>
                 </tr>
               </thead>
               <tbody>
                 {projects.map(project => (
-                  <tr key={project.projectId} className="border-b hover:bg-muted/30 transition-colors">
+                  <tr key={project.projectId} className="border-b hover:bg-muted/30 transition-colors duration-150">
                     <td className="py-3 px-2">
                       <span className="font-medium text-foreground">{project.projectName}</span>
                       {project.clientName && <p className="text-xs text-muted-foreground">{project.clientName}</p>}
@@ -154,11 +153,11 @@ export default function Timesheet() {
                   </tr>
                 ))}
                 {projects.length === 0 && (
-                  <tr><td colSpan={2} className="text-center py-8 text-muted-foreground">{isAdmin ? 'No hay proyectos activos disponibles' : 'No tienes proyectos asignados. Contacta a tu administrador.'}</td></tr>
+                  <tr><td colSpan={2} className="text-center py-8 text-muted-foreground">{isAdmin ? 'No active projects available yet.' : 'No projects assigned to you. Reach out to your admin for access.'}</td></tr>
                 )}
                 {projects.length > 0 && (
                   <tr className="bg-muted/50">
-                    <td className="py-3 px-2 font-semibold text-foreground">Total Semanal</td>
+                    <td className="py-3 px-2 font-semibold text-foreground">Weekly Total</td>
                     <td className="py-3 px-2 text-center"><span className="font-bold text-lg text-primary">{getTotalWeek()}h</span></td>
                   </tr>
                 )}

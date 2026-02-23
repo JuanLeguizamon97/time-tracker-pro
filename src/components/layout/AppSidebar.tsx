@@ -17,17 +17,17 @@ import {
 import { Button } from '@/components/ui/button';
 
 const adminNavigationItems = [
-  { title: 'Registro Semanal', url: '/', icon: Clock },
-  { title: 'Historial', url: '/historial', icon: Calendar },
-  { title: 'Proyectos', url: '/proyectos', icon: Briefcase },
-  { title: 'Clientes', url: '/clientes', icon: Users },
-  { title: 'Empleados', url: '/empleados', icon: UserCircle },
-  { title: 'Facturación', url: '/facturacion', icon: FileText },
+  { title: 'Weekly Log', url: '/', icon: Clock },
+  { title: 'History', url: '/history', icon: Calendar },
+  { title: 'Projects', url: '/projects', icon: Briefcase },
+  { title: 'Clients', url: '/clients', icon: Users },
+  { title: 'Employees', url: '/employees', icon: UserCircle },
+  { title: 'Billing', url: '/billing', icon: FileText },
 ];
 
 const employeeNavigationItems = [
-  { title: 'Registro Semanal', url: '/', icon: Clock },
-  { title: 'Historial', url: '/historial', icon: Calendar },
+  { title: 'Weekly Log', url: '/', icon: Clock },
+  { title: 'History', url: '/history', icon: Calendar },
 ];
 
 export function AppSidebar() {
@@ -46,8 +46,8 @@ export function AppSidebar() {
           </div>
           {!isCollapsed && (
             <div className="flex flex-col animate-fade-in">
-              <span className="text-lg font-bold text-sidebar-foreground">TimeTrack</span>
-              <span className="text-xs text-sidebar-muted">Gestión de Horas</span>
+              <span className="text-lg font-bold text-sidebar-foreground">Horas+</span>
+              <span className="text-xs text-sidebar-muted">Time Tracking</span>
             </div>
           )}
         </div>
@@ -57,7 +57,7 @@ export function AppSidebar() {
         <SidebarGroup>
           {!isCollapsed && (
             <SidebarGroupLabel className="text-sidebar-muted text-xs uppercase tracking-wider px-3 mb-2">
-              Navegación
+              Navigation
             </SidebarGroupLabel>
           )}
           <SidebarGroupContent>
@@ -86,7 +86,7 @@ export function AppSidebar() {
         {!isCollapsed && employee && (
           <div className="px-3 py-2 text-sm text-sidebar-muted">
             <p className="font-medium text-sidebar-foreground">{employee.name}</p>
-            <p className="text-xs">{isAdmin ? 'Administrador' : 'Empleado'}</p>
+            <p className="text-xs">{isAdmin ? 'Administrator' : 'Employee'}</p>
           </div>
         )}
         <Button
@@ -96,7 +96,7 @@ export function AppSidebar() {
           className="w-full text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent"
         >
           <LogOut className="h-5 w-5" />
-          {!isCollapsed && <span className="ml-2">Cerrar Sesión</span>}
+          {!isCollapsed && <span className="ml-2">Sign Out</span>}
         </Button>
         <Button
           variant="ghost"
