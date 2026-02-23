@@ -47,6 +47,7 @@ export type Database = {
           assigned_by: string | null
           id: string
           project_id: string
+          role_id: string | null
           user_id: string
         }
         Insert: {
@@ -54,6 +55,7 @@ export type Database = {
           assigned_by?: string | null
           id?: string
           project_id: string
+          role_id?: string | null
           user_id: string
         }
         Update: {
@@ -61,11 +63,143 @@ export type Database = {
           assigned_by?: string | null
           id?: string
           project_id?: string
+          role_id?: string | null
           user_id?: string
         }
         Relationships: [
           {
             foreignKeyName: "employee_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_projects_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "project_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_lines: {
+        Row: {
+          amount: number
+          created_at: string
+          employee_name: string
+          hours: number
+          id: string
+          invoice_id: string
+          rate_snapshot: number
+          role_name: string | null
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          employee_name: string
+          hours?: number
+          id?: string
+          invoice_id: string
+          rate_snapshot?: number
+          role_name?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          employee_name?: string
+          hours?: number
+          id?: string
+          invoice_id?: string
+          rate_snapshot?: number
+          role_name?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_lines_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_time_entries: {
+        Row: {
+          created_at: string
+          id: string
+          invoice_id: string
+          time_entry_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invoice_id: string
+          time_entry_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          time_entry_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_time_entries_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_time_entries_time_entry_id_fkey"
+            columns: ["time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "time_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          created_at: string
+          discount: number
+          id: string
+          notes: string | null
+          project_id: string
+          status: string
+          subtotal: number
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          discount?: number
+          id?: string
+          notes?: string | null
+          project_id: string
+          status?: string
+          subtotal?: number
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          discount?: number
+          id?: string
+          notes?: string | null
+          project_id?: string
+          status?: string
+          subtotal?: number
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -109,6 +243,38 @@ export type Database = {
         }
         Relationships: []
       }
+      project_roles: {
+        Row: {
+          created_at: string
+          hourly_rate_usd: number
+          id: string
+          name: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          hourly_rate_usd?: number
+          id?: string
+          name: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          hourly_rate_usd?: number
+          id?: string
+          name?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_roles_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           client_id: string
@@ -116,6 +282,7 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean
+          is_internal: boolean
           name: string
         }
         Insert: {
@@ -124,6 +291,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          is_internal?: boolean
           name: string
         }
         Update: {
@@ -132,6 +300,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          is_internal?: boolean
           name?: string
         }
         Relationships: [
@@ -146,27 +315,36 @@ export type Database = {
       }
       time_entries: {
         Row: {
+          billable: boolean
           created_at: string
           date: string
           hours: number
           id: string
+          notes: string | null
           project_id: string
+          status: string
           user_id: string
         }
         Insert: {
+          billable?: boolean
           created_at?: string
           date: string
           hours: number
           id?: string
+          notes?: string | null
           project_id: string
+          status?: string
           user_id: string
         }
         Update: {
+          billable?: boolean
           created_at?: string
           date?: string
           hours?: number
           id?: string
+          notes?: string | null
           project_id?: string
+          status?: string
           user_id?: string
         }
         Relationships: [

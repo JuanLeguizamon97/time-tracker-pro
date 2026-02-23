@@ -10,7 +10,7 @@ import History from "./pages/History";
 import Projects from "./pages/Projects";
 import Clients from "./pages/Clients";
 import Employees from "./pages/Employees";
-import Billing from "./pages/Billing";
+import Invoices from "./pages/Invoices";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,13 +29,14 @@ const App = () => (
             <Route path="/projects" element={<MainLayout><Projects /></MainLayout>} />
             <Route path="/clients" element={<MainLayout><Clients /></MainLayout>} />
             <Route path="/employees" element={<MainLayout><Employees /></MainLayout>} />
-            <Route path="/billing" element={<MainLayout><Billing /></MainLayout>} />
+            <Route path="/invoices" element={<MainLayout><Invoices /></MainLayout>} />
             {/* Legacy Spanish routes */}
             <Route path="/historial" element={<Navigate to="/history" replace />} />
             <Route path="/proyectos" element={<Navigate to="/projects" replace />} />
             <Route path="/clientes" element={<Navigate to="/clients" replace />} />
             <Route path="/empleados" element={<Navigate to="/employees" replace />} />
-            <Route path="/facturacion" element={<Navigate to="/billing" replace />} />
+            <Route path="/facturacion" element={<Navigate to="/invoices" replace />} />
+            <Route path="/billing" element={<Navigate to="/invoices" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

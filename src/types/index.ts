@@ -27,8 +27,19 @@ export interface Project {
   name: string;
   description: string | null;
   is_active: boolean;
+  is_internal: boolean;
   created_at: string;
 }
+
+export interface ProjectRole {
+  id: string;
+  project_id: string;
+  name: string;
+  hourly_rate_usd: number;
+  created_at: string;
+}
+
+export type TimeEntryStatus = 'normal' | 'on_hold';
 
 export interface TimeEntry {
   id: string;
@@ -36,6 +47,9 @@ export interface TimeEntry {
   project_id: string;
   date: string;
   hours: number;
+  billable: boolean;
+  notes: string | null;
+  status: TimeEntryStatus;
   created_at: string;
 }
 
@@ -43,6 +57,7 @@ export interface EmployeeProject {
   id: string;
   user_id: string;
   project_id: string;
+  role_id: string | null;
   assigned_at: string;
   assigned_by: string | null;
 }
@@ -57,4 +72,37 @@ export interface UserRole {
   id: string;
   user_id: string;
   role: AppRole;
+}
+
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'cancelled' | 'voided';
+
+export interface Invoice {
+  id: string;
+  project_id: string;
+  status: InvoiceStatus;
+  subtotal: number;
+  discount: number;
+  total: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvoiceLine {
+  id: string;
+  invoice_id: string;
+  user_id: string;
+  employee_name: string;
+  role_name: string | null;
+  hours: number;
+  rate_snapshot: number;
+  amount: number;
+  created_at: string;
+}
+
+export interface InvoiceTimeEntry {
+  id: string;
+  invoice_id: string;
+  time_entry_id: string;
+  created_at: string;
 }
