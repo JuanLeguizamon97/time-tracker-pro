@@ -45,6 +45,7 @@ export interface TimeEntry {
   id: string;
   user_id: string;
   project_id: string;
+  role_id: string | null;
   date: string;
   hours: number;
   billable: boolean;

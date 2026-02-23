@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
-import { Plus, FileText, DollarSign, ChevronRight, Loader2, Edit, Send, CheckCircle, XCircle, Ban, RefreshCw } from 'lucide-react';
+import { Plus, FileText, DollarSign, ChevronRight, Loader2, Edit, Send, CheckCircle, XCircle, Ban, RefreshCw, Calculator } from 'lucide-react';
 import { format } from 'date-fns';
 import { useInvoices, useCreateInvoice, useUpdateInvoice, useInvoiceLines, useCreateInvoiceLines, useUpdateInvoiceLine, useDeleteInvoiceLine, useLinkTimeEntries } from '@/hooks/useInvoices';
 import { useProjects } from '@/hooks/useProjects';
 import { useClients } from '@/hooks/useClients';
 import { useEmployees } from '@/hooks/useEmployees';
-import { useProjectRoles } from '@/hooks/useProjectRoles';
+import { useProjectRoles, useUpdateProjectRole } from '@/hooks/useProjectRoles';
 import { Invoice, InvoiceLine, InvoiceStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +18,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -35,8 +38,10 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
   const updateInvoice = useUpdateInvoice();
   const updateLine = useUpdateInvoiceLine();
   const deleteLine = useDeleteInvoiceLine();
+  const updateProjectRole = useUpdateProjectRole();
   const { data: projects = [] } = useProjects();
   const { data: clients = [] } = useClients();
+  const { data: allInvoices = [] } = useInvoices();
   const queryClient = useQueryClient();
 
   const [editingNotes, setEditingNotes] = useState(false);
@@ -44,12 +49,13 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
   const [discount, setDiscount] = useState(0);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [lineHours, setLineHours] = useState(0);
+  const [editingRateLineId, setEditingRateLineId] = useState<string | null>(null);
+  const [lineRate, setLineRate] = useState(0);
 
   const project = projects.find(p => p.id === invoice?.project_id);
   const client = project ? clients.find(c => c.id === project.client_id) : null;
   const isEditable = invoice?.status === 'draft' || invoice?.status === 'sent';
 
-  // Fetch project roles for "Update to current rates"
   const { data: projectRoles = [] } = useProjectRoles(invoice?.project_id);
 
   const subtotal = lines.reduce((sum, l) => sum + Number(l.amount), 0);
@@ -94,6 +100,27 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
     } catch { toast.error('Something went wrong. Please try again.'); }
   };
 
+  // Edit rate on a line → updates the PROJECT ROLE rate (source of truth)
+  const handleUpdateLineRate = async (lineId: string) => {
+    const line = lines.find(l => l.id === lineId);
+    if (!line || !invoice) return;
+    try {
+      // Find the project role by matching role_name
+      const matchingRole = projectRoles.find(r => r.name === line.role_name);
+      if (matchingRole) {
+        // Update the project role rate (source of truth)
+        await updateProjectRole.mutateAsync({ id: matchingRole.id, updates: { hourly_rate_usd: lineRate } });
+      }
+      // Update the invoice line snapshot
+      const newAmount = Number(line.hours) * lineRate;
+      await updateLine.mutateAsync({ id: lineId, updates: { rate_snapshot: lineRate, amount: newAmount } });
+      setEditingRateLineId(null);
+      const newSubtotal = lines.reduce((sum, l) => sum + (l.id === lineId ? newAmount : Number(l.amount)), 0);
+      await updateInvoice.mutateAsync({ id: invoice.id, updates: { subtotal: newSubtotal, total: newSubtotal - (invoice.discount || 0) } });
+      toast.success('Rate updated. Project role rate has been updated too.');
+    } catch { toast.error('Something went wrong. Please try again.'); }
+  };
+
   const handleRemoveLine = async (lineId: string) => {
     if (!invoice) return;
     try {
@@ -107,12 +134,10 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
   const handleUpdateToCurrentRates = async () => {
     if (!invoice || !isEditable) return;
     try {
-      // For each line, find matching project role and update rate
       const promises: Promise<unknown>[] = [];
       let newSubtotal = 0;
 
       for (const line of lines) {
-        // Try to find the employee's assigned role for this project
         const { data: assignment } = await supabase
           .from('employee_projects')
           .select('role_id')
@@ -128,13 +153,92 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
 
         const newAmount = Number(line.hours) * newRate;
         newSubtotal += newAmount;
-        promises.push(updateLine.mutateAsync({ id: line.id, updates: { rate_snapshot: newRate, amount: newAmount } }));
+        promises.push(updateLine.mutateAsync({ id: line.id, updates: { rate_snapshot: newRate, amount: newAmount, role_name: projectRoles.find(r => r.id === assignment?.role_id)?.name || line.role_name } }));
       }
 
       await Promise.all(promises);
       await updateInvoice.mutateAsync({ id: invoice.id, updates: { subtotal: newSubtotal, total: newSubtotal - (invoice.discount || 0) } });
       queryClient.invalidateQueries({ queryKey: ['invoice-lines'] });
       toast.success('Rates updated to current project rates.');
+    } catch { toast.error('Something went wrong. Please try again.'); }
+  };
+
+  // Recalculate all unpaid invoices for this project
+  const handleRecalcAllUnpaid = async () => {
+    if (!invoice) return;
+    try {
+      const unpaidInvoices = allInvoices.filter(i => i.project_id === invoice.project_id && (i.status === 'draft' || i.status === 'sent'));
+      let count = 0;
+
+      for (const inv of unpaidInvoices) {
+        const { data: invLines } = await supabase.from('invoice_lines').select('*').eq('invoice_id', inv.id);
+        if (!invLines || invLines.length === 0) continue;
+
+        let newSubtotal = 0;
+        for (const line of invLines) {
+          const { data: assignment } = await supabase
+            .from('employee_projects')
+            .select('role_id')
+            .eq('user_id', line.user_id)
+            .eq('project_id', inv.project_id)
+            .maybeSingle();
+
+          let newRate = Number(line.rate_snapshot);
+          if (assignment?.role_id) {
+            const role = projectRoles.find(r => r.id === assignment.role_id);
+            if (role) newRate = Number(role.hourly_rate_usd);
+          }
+          const newAmount = Number(line.hours) * newRate;
+          newSubtotal += newAmount;
+          await supabase.from('invoice_lines').update({ rate_snapshot: newRate, amount: newAmount }).eq('id', line.id);
+        }
+        await supabase.from('invoices').update({ subtotal: newSubtotal, total: newSubtotal - Number(inv.discount) }).eq('id', inv.id);
+        count++;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['invoice-lines'] });
+      toast.success(`Recalculated ${count} unpaid invoice${count !== 1 ? 's' : ''} for this project.`);
+    } catch { toast.error('Something went wrong. Please try again.'); }
+  };
+
+  // Recalculate latest unpaid invoice for this project
+  const handleRecalcLatestUnpaid = async () => {
+    if (!invoice) return;
+    try {
+      const unpaidInvoices = allInvoices
+        .filter(i => i.project_id === invoice.project_id && (i.status === 'draft' || i.status === 'sent'))
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      if (unpaidInvoices.length === 0) { toast.info('No unpaid invoices found for this project.'); return; }
+
+      const latest = unpaidInvoices[0];
+      const { data: invLines } = await supabase.from('invoice_lines').select('*').eq('invoice_id', latest.id);
+      if (!invLines || invLines.length === 0) { toast.info('No lines on the latest unpaid invoice.'); return; }
+
+      let newSubtotal = 0;
+      for (const line of invLines) {
+        const { data: assignment } = await supabase
+          .from('employee_projects')
+          .select('role_id')
+          .eq('user_id', line.user_id)
+          .eq('project_id', latest.project_id)
+          .maybeSingle();
+
+        let newRate = Number(line.rate_snapshot);
+        if (assignment?.role_id) {
+          const role = projectRoles.find(r => r.id === assignment.role_id);
+          if (role) newRate = Number(role.hourly_rate_usd);
+        }
+        const newAmount = Number(line.hours) * newRate;
+        newSubtotal += newAmount;
+        await supabase.from('invoice_lines').update({ rate_snapshot: newRate, amount: newAmount }).eq('id', line.id);
+      }
+      await supabase.from('invoices').update({ subtotal: newSubtotal, total: newSubtotal - Number(latest.discount) }).eq('id', latest.id);
+
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['invoice-lines'] });
+      toast.success(`Recalculated latest unpaid invoice (#${latest.id.slice(0, 8)}).`);
     } catch { toast.error('Something went wrong. Please try again.'); }
   };
 
@@ -157,12 +261,25 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
 
         {/* Employee Lines */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <h3 className="font-semibold text-foreground">Employee Lines</h3>
             {isEditable && (
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleUpdateToCurrentRates}>
-                <RefreshCw className="h-3.5 w-3.5" />Update to Current Rates
-              </Button>
+              <div className="flex gap-2 flex-wrap">
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleUpdateToCurrentRates}>
+                  <RefreshCw className="h-3.5 w-3.5" />Update to Current Rates
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                      <Calculator className="h-3.5 w-3.5" />Recalculate
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleRecalcAllUnpaid}>All unpaid invoices for this project</DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleRecalcLatestUnpaid}>Latest unpaid invoice for this project</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             )}
           </div>
           {isLoading ? (
@@ -196,7 +313,16 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
                         <span className={isEditable ? 'cursor-pointer hover:text-primary' : ''} onClick={() => { if (isEditable) { setEditingLineId(line.id); setLineHours(Number(line.hours)); } }}>{Number(line.hours)}h</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">${Number(line.rate_snapshot)}/h</TableCell>
+                    <TableCell className="text-right">
+                      {editingRateLineId === line.id ? (
+                        <div className="flex items-center gap-1 justify-end">
+                          <Input type="number" min="0" step="0.5" value={lineRate} onChange={(e) => setLineRate(parseFloat(e.target.value) || 0)} className="w-20 h-8 text-right" />
+                          <Button size="sm" variant="ghost" onClick={() => handleUpdateLineRate(line.id)}>✓</Button>
+                        </div>
+                      ) : (
+                        <span className={isEditable ? 'cursor-pointer hover:text-primary' : ''} onClick={() => { if (isEditable) { setEditingRateLineId(line.id); setLineRate(Number(line.rate_snapshot)); } }}>${Number(line.rate_snapshot)}/h</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right font-semibold text-primary">${Number(line.amount).toLocaleString()}</TableCell>
                     {isEditable && (
                       <TableCell className="text-right">
@@ -319,7 +445,6 @@ export default function Invoices() {
     try {
       const invoice = await createInvoice.mutateAsync({ project_id: selectedProjectId });
 
-      // Find billable, normal time entries not already invoiced
       const { data: existingLinked } = await supabase.from('invoice_time_entries').select('time_entry_id');
       const linkedIds = new Set((existingLinked || []).map(e => e.time_entry_id));
 
@@ -340,15 +465,8 @@ export default function Invoices() {
       }
 
       // Get project roles and employee assignments for rate lookup
-      const { data: projectRoles } = await supabase
-        .from('project_roles')
-        .select('*')
-        .eq('project_id', selectedProjectId);
-
-      const { data: assignments } = await supabase
-        .from('employee_projects')
-        .select('user_id, role_id')
-        .eq('project_id', selectedProjectId);
+      const { data: projectRoles } = await supabase.from('project_roles').select('*').eq('project_id', selectedProjectId);
+      const { data: assignments } = await supabase.from('employee_projects').select('user_id, role_id').eq('project_id', selectedProjectId);
 
       const assignmentMap = new Map((assignments || []).map(a => [a.user_id, a.role_id]));
       const rolesMap = new Map((projectRoles || []).map(r => [r.id, r]));
@@ -365,8 +483,8 @@ export default function Invoices() {
         employeeHours[key].entryIds.push(entry.id);
       });
 
-      // Create lines using project role rates
-      const lines = Object.values(employeeHours).map(eh => {
+      // Create lines using project role rates (NEVER employee rates)
+      const lineData = Object.values(employeeHours).map(eh => {
         const roleId = assignmentMap.get(eh.userId);
         const role = roleId ? rolesMap.get(roleId) : null;
         const rate = role ? Number(role.hourly_rate_usd) : 0;
@@ -381,17 +499,15 @@ export default function Invoices() {
         };
       });
 
-      await createLines.mutateAsync(lines);
+      await createLines.mutateAsync(lineData);
 
-      // Link time entries
       const links = Object.values(employeeHours).flatMap(eh =>
         eh.entryIds.map(id => ({ invoice_id: invoice.id, time_entry_id: id }))
       );
       await linkTimeEntries.mutateAsync(links);
 
-      // Update totals
-      const subtotal = lines.reduce((sum, l) => sum + l.amount, 0);
-      await updateInvoice.mutateAsync({ id: invoice.id, updates: { subtotal, total: subtotal } });
+      const subtotalVal = lineData.reduce((sum, l) => sum + l.amount, 0);
+      await updateInvoice.mutateAsync({ id: invoice.id, updates: { subtotal: subtotalVal, total: subtotalVal } });
 
       toast.success(`Invoice created with ${availableEntries.length} entries.`);
       setIsCreateOpen(false);
@@ -418,7 +534,7 @@ export default function Invoices() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Invoices</h1>
-          <p className="text-muted-foreground">Create and manage project invoices</p>
+          <p className="text-muted-foreground">Create and manage project invoices — rates come from project roles</p>
         </div>
         <Button className="gap-2" onClick={() => setIsCreateOpen(true)}>
           <Plus className="h-4 w-4" />New Invoice
@@ -546,7 +662,6 @@ export default function Invoices() {
         </DialogContent>
       </Dialog>
 
-      {/* Invoice Detail Dialog */}
       <InvoiceDetailDialog invoice={selectedInvoice} open={isDetailOpen} onOpenChange={setIsDetailOpen} />
     </div>
   );

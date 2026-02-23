@@ -322,6 +322,7 @@ export type Database = {
           id: string
           notes: string | null
           project_id: string
+          role_id: string | null
           status: string
           user_id: string
         }
@@ -333,6 +334,7 @@ export type Database = {
           id?: string
           notes?: string | null
           project_id: string
+          role_id?: string | null
           status?: string
           user_id: string
         }
@@ -344,6 +346,7 @@ export type Database = {
           id?: string
           notes?: string | null
           project_id?: string
+          role_id?: string | null
           status?: string
           user_id?: string
         }
@@ -353,6 +356,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entries_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "project_roles"
             referencedColumns: ["id"]
           },
         ]
