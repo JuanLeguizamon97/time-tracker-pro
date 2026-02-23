@@ -1,11 +1,10 @@
 import { useState, useMemo } from 'react';
-import { Plus, FileText, DollarSign, ChevronRight, Loader2, MoreHorizontal, Edit, Send, CheckCircle, XCircle, Ban, RefreshCw } from 'lucide-react';
+import { Plus, FileText, DollarSign, ChevronRight, Loader2, Edit, Send, CheckCircle, XCircle, Ban, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { useInvoices, useCreateInvoice, useUpdateInvoice, useInvoiceLines, useCreateInvoiceLines, useUpdateInvoiceLine, useDeleteInvoiceLine, useLinkTimeEntries } from '@/hooks/useInvoices';
 import { useProjects } from '@/hooks/useProjects';
 import { useClients } from '@/hooks/useClients';
 import { useEmployees } from '@/hooks/useEmployees';
-import { useAllTimeEntriesByDateRange } from '@/hooks/useTimeEntries';
 import { useProjectRoles } from '@/hooks/useProjectRoles';
 import { Invoice, InvoiceLine, InvoiceStatus } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -19,19 +18,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 
-const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
-  draft: { label: 'Draft', color: 'bg-muted text-muted-foreground', variant: 'secondary' },
-  sent: { label: 'Sent', color: 'bg-primary/10 text-primary', variant: 'outline' },
-  paid: { label: 'Paid', color: 'bg-success/10 text-success', variant: 'default' },
-  cancelled: { label: 'Cancelled', color: 'bg-destructive/10 text-destructive', variant: 'destructive' },
-  voided: { label: 'Voided', color: 'bg-muted text-muted-foreground', variant: 'secondary' },
+const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string }> = {
+  draft: { label: 'Draft', color: 'bg-muted text-muted-foreground' },
+  sent: { label: 'Sent', color: 'bg-primary/10 text-primary' },
+  paid: { label: 'Paid', color: 'bg-success/10 text-success' },
+  cancelled: { label: 'Cancelled', color: 'bg-destructive/10 text-destructive' },
+  voided: { label: 'Voided', color: 'bg-muted text-muted-foreground' },
 };
 
 function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice | null; open: boolean; onOpenChange: (v: boolean) => void }) {
@@ -52,6 +48,9 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
   const project = projects.find(p => p.id === invoice?.project_id);
   const client = project ? clients.find(c => c.id === project.client_id) : null;
   const isEditable = invoice?.status === 'draft' || invoice?.status === 'sent';
+
+  // Fetch project roles for "Update to current rates"
+  const { data: projectRoles = [] } = useProjectRoles(invoice?.project_id);
 
   const subtotal = lines.reduce((sum, l) => sum + Number(l.amount), 0);
 
@@ -89,7 +88,6 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
       const amount = lineHours * Number(line.rate_snapshot);
       await updateLine.mutateAsync({ id: lineId, updates: { hours: lineHours, amount } });
       setEditingLineId(null);
-      // Recalc invoice totals
       const newSubtotal = lines.reduce((sum, l) => sum + (l.id === lineId ? amount : Number(l.amount)), 0);
       await updateInvoice.mutateAsync({ id: invoice!.id, updates: { subtotal: newSubtotal, total: newSubtotal - (invoice!.discount || 0) } });
       toast.success("Saved — you're all set.");
@@ -103,6 +101,40 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
       const newSubtotal = lines.filter(l => l.id !== lineId).reduce((sum, l) => sum + Number(l.amount), 0);
       await updateInvoice.mutateAsync({ id: invoice.id, updates: { subtotal: newSubtotal, total: newSubtotal - (invoice.discount || 0) } });
       toast.success('Employee line removed.');
+    } catch { toast.error('Something went wrong. Please try again.'); }
+  };
+
+  const handleUpdateToCurrentRates = async () => {
+    if (!invoice || !isEditable) return;
+    try {
+      // For each line, find matching project role and update rate
+      const promises: Promise<unknown>[] = [];
+      let newSubtotal = 0;
+
+      for (const line of lines) {
+        // Try to find the employee's assigned role for this project
+        const { data: assignment } = await supabase
+          .from('employee_projects')
+          .select('role_id')
+          .eq('user_id', line.user_id)
+          .eq('project_id', invoice.project_id)
+          .maybeSingle();
+
+        let newRate = Number(line.rate_snapshot);
+        if (assignment?.role_id) {
+          const role = projectRoles.find(r => r.id === assignment.role_id);
+          if (role) newRate = Number(role.hourly_rate_usd);
+        }
+
+        const newAmount = Number(line.hours) * newRate;
+        newSubtotal += newAmount;
+        promises.push(updateLine.mutateAsync({ id: line.id, updates: { rate_snapshot: newRate, amount: newAmount } }));
+      }
+
+      await Promise.all(promises);
+      await updateInvoice.mutateAsync({ id: invoice.id, updates: { subtotal: newSubtotal, total: newSubtotal - (invoice.discount || 0) } });
+      queryClient.invalidateQueries({ queryKey: ['invoice-lines'] });
+      toast.success('Rates updated to current project rates.');
     } catch { toast.error('Something went wrong. Please try again.'); }
   };
 
@@ -125,7 +157,14 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
 
         {/* Employee Lines */}
         <div className="space-y-4">
-          <h3 className="font-semibold text-foreground">Employee Lines</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-foreground">Employee Lines</h3>
+            {isEditable && (
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleUpdateToCurrentRates}>
+                <RefreshCw className="h-3.5 w-3.5" />Update to Current Rates
+              </Button>
+            )}
+          </div>
           {isLoading ? (
             <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
           ) : lines.length === 0 ? (
@@ -265,11 +304,9 @@ export default function Invoices() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const activeProjects = projects.filter(p => p.is_active && !(p as any).is_internal);
+  const activeProjects = projects.filter(p => p.is_active && !p.is_internal);
 
-  const filteredInvoices = statusFilter === 'all'
-    ? invoices
-    : invoices.filter(inv => inv.status === statusFilter);
+  const filteredInvoices = statusFilter === 'all' ? invoices : invoices.filter(inv => inv.status === statusFilter);
 
   const getProjectName = (projectId: string) => projects.find(p => p.id === projectId)?.name || 'Unknown';
   const getClientName = (projectId: string) => {
@@ -280,10 +317,9 @@ export default function Invoices() {
   const handleCreateInvoice = async () => {
     if (!selectedProjectId) { toast.error('Please select a project.'); return; }
     try {
-      // Create invoice
       const invoice = await createInvoice.mutateAsync({ project_id: selectedProjectId });
 
-      // Find billable, normal time entries for this project that aren't already invoiced
+      // Find billable, normal time entries not already invoiced
       const { data: existingLinked } = await supabase.from('invoice_time_entries').select('time_entry_id');
       const linkedIds = new Set((existingLinked || []).map(e => e.time_entry_id));
 
@@ -303,6 +339,20 @@ export default function Invoices() {
         return;
       }
 
+      // Get project roles and employee assignments for rate lookup
+      const { data: projectRoles } = await supabase
+        .from('project_roles')
+        .select('*')
+        .eq('project_id', selectedProjectId);
+
+      const { data: assignments } = await supabase
+        .from('employee_projects')
+        .select('user_id, role_id')
+        .eq('project_id', selectedProjectId);
+
+      const assignmentMap = new Map((assignments || []).map(a => [a.user_id, a.role_id]));
+      const rolesMap = new Map((projectRoles || []).map(r => [r.id, r]));
+
       // Aggregate by employee
       const employeeHours: Record<string, { hours: number; userId: string; name: string; entryIds: string[] }> = {};
       availableEntries.forEach(entry => {
@@ -315,15 +365,16 @@ export default function Invoices() {
         employeeHours[key].entryIds.push(entry.id);
       });
 
-      // Create lines with rate snapshot from employee hourly_rate
+      // Create lines using project role rates
       const lines = Object.values(employeeHours).map(eh => {
-        const emp = employees.find(e => e.user_id === eh.userId);
-        const rate = Number(emp?.hourly_rate) || 0;
+        const roleId = assignmentMap.get(eh.userId);
+        const role = roleId ? rolesMap.get(roleId) : null;
+        const rate = role ? Number(role.hourly_rate_usd) : 0;
         return {
           invoice_id: invoice.id,
           user_id: eh.userId,
           employee_name: eh.name,
-          role_name: null as string | null,
+          role_name: role?.name || null,
           hours: eh.hours,
           rate_snapshot: rate,
           amount: eh.hours * rate,
@@ -338,7 +389,7 @@ export default function Invoices() {
       );
       await linkTimeEntries.mutateAsync(links);
 
-      // Update invoice totals
+      // Update totals
       const subtotal = lines.reduce((sum, l) => sum + l.amount, 0);
       await updateInvoice.mutateAsync({ id: invoice.id, updates: { subtotal, total: subtotal } });
 
@@ -359,7 +410,7 @@ export default function Invoices() {
   }, [invoices]);
 
   if (isLoading) {
-    return (<div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>);
+    return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
   return (
@@ -469,7 +520,7 @@ export default function Invoices() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Invoice</DialogTitle>
-            <DialogDescription>Select a project to generate an invoice from its billable time entries.</DialogDescription>
+            <DialogDescription>Select a project to generate an invoice from its billable time entries. Rates are pulled from project roles.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">

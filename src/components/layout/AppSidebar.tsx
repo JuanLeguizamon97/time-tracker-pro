@@ -1,40 +1,34 @@
-import { Clock, Calendar, Briefcase, Users, FileText, UserCircle, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { Clock, Calendar, Briefcase, Users, FileText, UserCircle, ChevronLeft, ChevronRight, LogOut, LayoutDashboard, BarChart3 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarHeader,
-  SidebarFooter,
-  useSidebar,
+  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
+  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 
 const adminNavigationItems = [
-  { title: 'Weekly Log', url: '/', icon: Clock },
+  { title: 'Dashboard', url: '/', icon: LayoutDashboard },
+  { title: 'Weekly Log', url: '/timesheet', icon: Clock },
   { title: 'History', url: '/history', icon: Calendar },
   { title: 'Projects', url: '/projects', icon: Briefcase },
   { title: 'Clients', url: '/clients', icon: Users },
   { title: 'Employees', url: '/employees', icon: UserCircle },
   { title: 'Invoices', url: '/invoices', icon: FileText },
+  { title: 'Reports', url: '/reports', icon: BarChart3 },
 ];
 
 const employeeNavigationItems = [
-  { title: 'Weekly Log', url: '/', icon: Clock },
+  { title: 'Dashboard', url: '/', icon: LayoutDashboard },
+  { title: 'Weekly Log', url: '/timesheet', icon: Clock },
   { title: 'History', url: '/history', icon: Calendar },
+  { title: 'Reports', url: '/reports', icon: BarChart3 },
 ];
 
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const { isAdmin, employee, signOut } = useAuth();
   const isCollapsed = state === 'collapsed';
-
   const navigationItems = isAdmin ? adminNavigationItems : employeeNavigationItems;
 
   return (
@@ -56,9 +50,7 @@ export function AppSidebar() {
       <SidebarContent className="px-2">
         <SidebarGroup>
           {!isCollapsed && (
-            <SidebarGroupLabel className="text-sidebar-muted text-xs uppercase tracking-wider px-3 mb-2">
-              Navigation
-            </SidebarGroupLabel>
+            <SidebarGroupLabel className="text-sidebar-muted text-xs uppercase tracking-wider px-3 mb-2">Navigation</SidebarGroupLabel>
           )}
           <SidebarGroupContent>
             <SidebarMenu>
@@ -89,21 +81,11 @@ export function AppSidebar() {
             <p className="text-xs">{isAdmin ? 'Administrator' : 'Employee'}</p>
           </div>
         )}
-        <Button
-          variant="ghost"
-          size={isCollapsed ? 'icon' : 'default'}
-          onClick={signOut}
-          className="w-full text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent"
-        >
+        <Button variant="ghost" size={isCollapsed ? 'icon' : 'default'} onClick={signOut} className="w-full text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent">
           <LogOut className="h-5 w-5" />
           {!isCollapsed && <span className="ml-2">Sign Out</span>}
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleSidebar}
-          className="w-full h-10 text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent"
-        >
+        <Button variant="ghost" size="icon" onClick={toggleSidebar} className="w-full h-10 text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent">
           {isCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
         </Button>
       </SidebarFooter>

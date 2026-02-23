@@ -5,12 +5,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { MainLayout } from "@/components/layout/MainLayout";
+import Dashboard from "./pages/Dashboard";
 import Timesheet from "./pages/Timesheet";
 import History from "./pages/History";
 import Projects from "./pages/Projects";
 import Clients from "./pages/Clients";
 import Employees from "./pages/Employees";
 import Invoices from "./pages/Invoices";
+import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,13 +26,15 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<Navigate to="/" replace />} />
-            <Route path="/" element={<MainLayout><Timesheet /></MainLayout>} />
+            <Route path="/" element={<MainLayout><Dashboard /></MainLayout>} />
+            <Route path="/timesheet" element={<MainLayout><Timesheet /></MainLayout>} />
             <Route path="/history" element={<MainLayout><History /></MainLayout>} />
             <Route path="/projects" element={<MainLayout><Projects /></MainLayout>} />
             <Route path="/clients" element={<MainLayout><Clients /></MainLayout>} />
             <Route path="/employees" element={<MainLayout><Employees /></MainLayout>} />
             <Route path="/invoices" element={<MainLayout><Invoices /></MainLayout>} />
-            {/* Legacy Spanish routes */}
+            <Route path="/reports" element={<MainLayout><Reports /></MainLayout>} />
+            {/* Legacy routes */}
             <Route path="/historial" element={<Navigate to="/history" replace />} />
             <Route path="/proyectos" element={<Navigate to="/projects" replace />} />
             <Route path="/clientes" element={<Navigate to="/clients" replace />} />
