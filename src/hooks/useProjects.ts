@@ -35,7 +35,7 @@ export function useCreateProject() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (project: { name: string; client_id: string; description?: string }) => {
+    mutationFn: async (project: { name: string; client_id: string; description?: string; is_internal?: boolean }) => {
       const { data, error } = await supabase
         .from('projects')
         .insert(project)

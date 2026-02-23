@@ -4,7 +4,7 @@ import { CalendarIcon, ChevronLeft, ChevronRight, Save, Loader2, Plus, Trash2, M
 import { useAuth } from '@/contexts/AuthContext';
 import { useActiveProjects } from '@/hooks/useProjects';
 import { useClients } from '@/hooks/useClients';
-import { useAssignedProjectsWithDetails } from '@/hooks/useAssignedProjects';
+import { useAssignedProjectsWithDetails, useAssignedProjects } from '@/hooks/useAssignedProjects';
 import { useTimeEntriesByWeek, useCreateTimeEntry, useUpdateTimeEntry, useDeleteTimeEntry } from '@/hooks/useTimeEntries';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -18,10 +18,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-import { TimeEntry, Project } from '@/types';
+import { TimeEntry } from '@/types';
 
 interface DayEntry {
-  id?: string; // existing entry id
+  id?: string;
   projectId: string;
   hours: number;
   notes: string;
@@ -43,11 +43,19 @@ export default function Timesheet() {
   const { data: allProjects = [], isLoading: projectsLoading } = useActiveProjects();
   const { data: clients = [] } = useClients();
   const { data: assignedProjects = [], isLoading: assignmentsLoading } = useAssignedProjectsWithDetails(employee?.user_id);
+  const { data: rawAssignments = [] } = useAssignedProjects(employee?.user_id);
   const { data: weekEntries = [], isLoading: entriesLoading } = useTimeEntriesByWeek(weekStart, employee?.user_id);
 
   const createTimeEntry = useCreateTimeEntry();
   const updateTimeEntry = useUpdateTimeEntry();
   const deleteTimeEntry = useDeleteTimeEntry();
+
+  // Build a map of project_id -> role_id from assignments
+  const assignmentRoleMap = useMemo(() => {
+    const map = new Map<string, string | null>();
+    rawAssignments.forEach(a => map.set(a.project_id, a.role_id));
+    return map;
+  }, [rawAssignments]);
 
   const availableProjects = useMemo(() => {
     if (isAdmin) {
@@ -68,16 +76,9 @@ export default function Timesheet() {
   const getEntriesForDay = (dayIndex: number): DayEntry[] => {
     const dateStr = getDayDateStr(dayIndex);
     if (pendingChanges[dateStr]) return pendingChanges[dateStr];
-
     return weekEntries
       .filter(e => e.date === dateStr)
-      .map(e => ({
-        id: e.id,
-        projectId: e.project_id,
-        hours: Number(e.hours),
-        notes: e.notes || '',
-        billable: e.billable,
-      }));
+      .map(e => ({ id: e.id, projectId: e.project_id, hours: Number(e.hours), notes: e.notes || '', billable: e.billable }));
   };
 
   const updateDayEntries = (dayIndex: number, entries: DayEntry[]) => {
@@ -103,7 +104,6 @@ export default function Timesheet() {
   const handleUpdateEntry = (dayIndex: number, entryIndex: number, updates: Partial<DayEntry>) => {
     const entries = [...getEntriesForDay(dayIndex)];
     const entry = { ...entries[entryIndex], ...updates };
-    // Lock billable for internal projects
     const proj = availableProjects.find(p => p.id === entry.projectId);
     if (proj?.isInternal) entry.billable = false;
     entries[entryIndex] = entry;
@@ -118,10 +118,7 @@ export default function Timesheet() {
       return;
     }
     const proj = availableProjects.find(p => p.id === newProjectId);
-    handleUpdateEntry(dayIndex, entryIndex, {
-      projectId: newProjectId,
-      billable: proj?.isInternal ? false : true,
-    });
+    handleUpdateEntry(dayIndex, entryIndex, { projectId: newProjectId, billable: proj?.isInternal ? false : true });
   };
 
   const handleRemoveEntry = (dayIndex: number, entryIndex: number) => {
@@ -139,7 +136,6 @@ export default function Timesheet() {
         const existingForDate = weekEntries.filter(e => e.date === dateStr);
         const existingIds = new Set(entries.filter(e => e.id).map(e => e.id));
 
-        // Delete removed entries
         for (const existing of existingForDate) {
           if (!existingIds.has(existing.id)) {
             promises.push(deleteTimeEntry.mutateAsync(existing.id));
@@ -147,9 +143,12 @@ export default function Timesheet() {
         }
 
         for (const entry of entries) {
-          if (entry.hours <= 0 && !entry.id) continue; // skip empty new entries
+          if (entry.hours <= 0 && !entry.id) continue;
+
+          // Auto-resolve role_id from assignment
+          const roleId = assignmentRoleMap.get(entry.projectId) || null;
+
           if (entry.id) {
-            // Update existing
             const original = weekEntries.find(e => e.id === entry.id);
             if (original && (
               Number(original.hours) !== entry.hours ||
@@ -162,12 +161,16 @@ export default function Timesheet() {
               } else {
                 promises.push(updateTimeEntry.mutateAsync({
                   id: entry.id,
-                  updates: { hours: entry.hours, notes: entry.notes || null, billable: entry.billable, project_id: entry.projectId },
+                  updates: { hours: entry.hours, notes: entry.notes || null, billable: entry.billable, project_id: entry.projectId, role_id: roleId },
                 }));
               }
             }
           } else if (entry.hours > 0) {
-            // Create new
+            // Check assignment exists for non-admin
+            if (!isAdmin && !assignmentRoleMap.has(entry.projectId)) {
+              toast.error("You're not assigned to this project yet. Please contact an admin.");
+              continue;
+            }
             promises.push(createTimeEntry.mutateAsync({
               user_id: employee.user_id,
               project_id: entry.projectId,
@@ -176,6 +179,7 @@ export default function Timesheet() {
               billable: entry.billable,
               notes: entry.notes || null,
               status: 'normal',
+              role_id: roleId,
             }));
           }
         }
@@ -283,7 +287,6 @@ export default function Timesheet() {
                     return (
                       <div key={entryIndex} className="flex flex-col gap-2 p-3 bg-muted/30 rounded-lg">
                         <div className="flex items-center gap-3 flex-wrap">
-                          {/* Project selector */}
                           <Select value={entry.projectId} onValueChange={(v) => handleChangeProject(dayIndex, entryIndex, v)}>
                             <SelectTrigger className="w-[200px] h-9">
                               <SelectValue placeholder="Select project" />
@@ -298,22 +301,16 @@ export default function Timesheet() {
                             </SelectContent>
                           </Select>
 
-                          {/* Hours */}
                           <div className="flex items-center gap-1.5">
                             <Input
-                              type="number"
-                              min="0"
-                              max="24"
-                              step="0.5"
+                              type="number" min="0" max="24" step="0.5"
                               value={entry.hours || ''}
                               onChange={(e) => handleUpdateEntry(dayIndex, entryIndex, { hours: parseFloat(e.target.value) || 0 })}
-                              className="time-input w-20 h-9"
-                              placeholder="0"
+                              className="time-input w-20 h-9" placeholder="0"
                             />
                             <span className="text-sm text-muted-foreground">hrs</span>
                           </div>
 
-                          {/* Billable toggle */}
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div className="flex items-center gap-1.5">
@@ -333,30 +330,25 @@ export default function Timesheet() {
                             )}
                           </Tooltip>
 
-                          {/* Notes toggle */}
                           <Button
-                            variant="ghost"
-                            size="sm"
+                            variant="ghost" size="sm"
                             className={`h-8 px-2 ${entry.notes ? 'text-primary' : 'text-muted-foreground'}`}
                             onClick={() => setExpandedNotes(expandedNotes === noteKey ? null : noteKey)}
                           >
                             <MessageSquare className="h-4 w-4" />
                           </Button>
 
-                          {/* Remove */}
                           <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-destructive ml-auto" onClick={() => handleRemoveEntry(dayIndex, entryIndex)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
 
-                        {/* Notes expanded */}
                         {expandedNotes === noteKey && (
                           <Textarea
                             placeholder="Add notes for this entry..."
                             value={entry.notes}
                             onChange={(e) => handleUpdateEntry(dayIndex, entryIndex, { notes: e.target.value })}
-                            rows={2}
-                            className="text-sm"
+                            rows={2} className="text-sm"
                           />
                         )}
                       </div>

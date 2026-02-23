@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { UserCircle, Search, MoreHorizontal, Edit, DollarSign, Shield, Loader2, FolderKanban } from 'lucide-react';
+import { UserCircle, Search, MoreHorizontal, Edit, Shield, Loader2, FolderKanban } from 'lucide-react';
 import { useEmployees, useUpdateEmployee } from '@/hooks/useEmployees';
 import { useAssignedProjects } from '@/hooks/useAssignedProjects';
 import { useAuth } from '@/contexts/AuthContext';
@@ -43,7 +43,7 @@ export default function Employees() {
   const [isProjectsDialogOpen, setIsProjectsDialogOpen] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [formData, setFormData] = useState({ name: '', hourly_rate: 0 });
+  const [formData, setFormData] = useState({ name: '' });
 
   const getRole = (userId: string): AppRole => roles.find(r => r.user_id === userId)?.role || 'employee';
 
@@ -54,7 +54,7 @@ export default function Employees() {
   const getAssignedProjectsCount = (userId: string): number => allAssignments.filter(a => a.user_id === userId).length;
 
   const handleEdit = (emp: Employee) => {
-    setFormData({ name: emp.name, hourly_rate: Number(emp.hourly_rate) || 0 });
+    setFormData({ name: emp.name });
     setEditingEmployeeId(emp.id);
     setIsDialogOpen(true);
   };
@@ -62,9 +62,9 @@ export default function Employees() {
   const handleOpenProjects = (emp: Employee) => { setSelectedEmployee(emp); setIsProjectsDialogOpen(true); };
 
   const handleSubmit = async () => {
-    if (!formData.name || formData.hourly_rate < 0) { toast.error('Please fill in all fields correctly.'); return; }
+    if (!formData.name) { toast.error('Please fill in all fields correctly.'); return; }
     try {
-      await updateEmployee.mutateAsync({ id: editingEmployeeId!, updates: { name: formData.name, hourly_rate: formData.hourly_rate } });
+      await updateEmployee.mutateAsync({ id: editingEmployeeId!, updates: { name: formData.name } });
       toast.success("Saved — you're all set.");
       setIsDialogOpen(false);
       setEditingEmployeeId(null);
@@ -75,18 +75,16 @@ export default function Employees() {
     return (<div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>);
   }
 
-  const avgRate = employees.length > 0 ? Math.round(employees.reduce((sum, e) => sum + (Number(e.hourly_rate) || 0), 0) / employees.length) : 0;
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Employees</h1>
-          <p className="text-muted-foreground">Manage team members, rates, roles, and assignments</p>
+          <p className="text-muted-foreground">Manage team members, roles, and project assignments</p>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card className="stat-card">
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
@@ -103,14 +101,6 @@ export default function Employees() {
             </div>
           </CardContent>
         </Card>
-        <Card className="stat-card">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning/10"><DollarSign className="h-6 w-6 text-warning" /></div>
-              <div><p className="text-sm text-muted-foreground">Avg. Rate</p><p className="text-2xl font-bold text-foreground">${avgRate}/h</p></div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       <Card className="card-elevated">
@@ -122,12 +112,12 @@ export default function Employees() {
           </div>
         </CardHeader>
         <CardContent>
+          <p className="text-xs text-muted-foreground mb-4">Rates are set per project role. Employee rates are derived from assignments.</p>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="table-header">Employee</TableHead>
                 <TableHead className="table-header">Email</TableHead>
-                <TableHead className="table-header">Rate/Hour</TableHead>
                 <TableHead className="table-header">Role</TableHead>
                 <TableHead className="table-header">Projects</TableHead>
                 <TableHead className="table-header text-right">Actions</TableHead>
@@ -145,7 +135,6 @@ export default function Employees() {
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{emp.email}</TableCell>
-                    <TableCell><span className="font-semibold text-primary">${Number(emp.hourly_rate) || 0}/h</span></TableCell>
                     <TableCell>
                       <Badge variant={role === 'admin' ? 'default' : 'outline'} className="gap-1">
                         <Shield className="h-3 w-3" />{role === 'admin' ? 'Admin' : 'Employee'}
@@ -179,16 +168,12 @@ export default function Employees() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Employee</DialogTitle>
-            <DialogDescription>Update employee details and rate.</DialogDescription>
+            <DialogDescription>Update employee details.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="name">Name</Label>
               <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="rate">Hourly rate ($)</Label>
-              <Input id="rate" type="number" min="0" step="0.5" value={formData.hourly_rate || ''} onChange={(e) => setFormData({ ...formData, hourly_rate: parseFloat(e.target.value) || 0 })} />
             </div>
           </div>
           <DialogFooter>
