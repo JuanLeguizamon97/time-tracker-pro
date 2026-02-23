@@ -22,7 +22,7 @@ const adminNavigationItems = [
   { title: 'Projects', url: '/projects', icon: Briefcase },
   { title: 'Clients', url: '/clients', icon: Users },
   { title: 'Employees', url: '/employees', icon: UserCircle },
-  { title: 'Billing', url: '/billing', icon: FileText },
+  { title: 'Invoices', url: '/invoices', icon: FileText },
 ];
 
 const employeeNavigationItems = [

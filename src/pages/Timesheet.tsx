@@ -76,6 +76,9 @@ export default function Timesheet() {
             project_id: projectId,
             date: dateStr,
             hours,
+            billable: true,
+            notes: null,
+            status: 'normal',
           }));
         }
       }
