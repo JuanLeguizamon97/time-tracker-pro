@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { CalendarIcon, ChevronLeft, ChevronRight, FileText, DollarSign, Users, Briefcase, Loader2 } from 'lucide-react';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useClients } from '@/hooks/useClients';
@@ -42,7 +41,7 @@ export default function Billing() {
       if (!projectBilling[entry.project_id]) {
         projectBilling[entry.project_id] = {
           projectName: project.name,
-          clientName: client?.name || 'Sin cliente',
+          clientName: client?.name || 'No client',
           employeeDetails: [],
           totalHours: 0,
           totalAmount: 0,
@@ -106,8 +105,8 @@ export default function Billing() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Facturación</h1>
-          <p className="text-muted-foreground">Resumen de facturación por proyecto y cliente</p>
+          <h1 className="text-2xl font-bold text-foreground">Billing</h1>
+          <p className="text-muted-foreground">Billing summary by project and client</p>
         </div>
       </div>
 
@@ -117,7 +116,7 @@ export default function Billing() {
           <PopoverTrigger asChild>
             <Button variant="outline" className="gap-2 min-w-[180px]">
               <CalendarIcon className="h-4 w-4" />
-              {format(selectedDate, 'MMMM yyyy', { locale: es })}
+              {format(selectedDate, 'MMMM yyyy')}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
@@ -128,15 +127,15 @@ export default function Billing() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="stat-card"><CardContent className="p-6"><div className="flex items-center gap-4"><div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10"><DollarSign className="h-6 w-6 text-primary" /></div><div><p className="text-sm text-muted-foreground">Total Facturado</p><p className="text-2xl font-bold text-foreground">${totals.amount.toLocaleString()}</p></div></div></CardContent></Card>
-        <Card className="stat-card"><CardContent className="p-6"><div className="flex items-center gap-4"><div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success/10"><FileText className="h-6 w-6 text-success" /></div><div><p className="text-sm text-muted-foreground">Horas Totales</p><p className="text-2xl font-bold text-foreground">{totals.hours}h</p></div></div></CardContent></Card>
-        <Card className="stat-card"><CardContent className="p-6"><div className="flex items-center gap-4"><div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning/10"><Users className="h-6 w-6 text-warning" /></div><div><p className="text-sm text-muted-foreground">Clientes Activos</p><p className="text-2xl font-bold text-foreground">{billingByClient.length}</p></div></div></CardContent></Card>
+        <Card className="stat-card"><CardContent className="p-6"><div className="flex items-center gap-4"><div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10"><DollarSign className="h-6 w-6 text-primary" /></div><div><p className="text-sm text-muted-foreground">Total Billed</p><p className="text-2xl font-bold text-foreground">${totals.amount.toLocaleString()}</p></div></div></CardContent></Card>
+        <Card className="stat-card"><CardContent className="p-6"><div className="flex items-center gap-4"><div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success/10"><FileText className="h-6 w-6 text-success" /></div><div><p className="text-sm text-muted-foreground">Total Hours</p><p className="text-2xl font-bold text-foreground">{totals.hours}h</p></div></div></CardContent></Card>
+        <Card className="stat-card"><CardContent className="p-6"><div className="flex items-center gap-4"><div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning/10"><Users className="h-6 w-6 text-warning" /></div><div><p className="text-sm text-muted-foreground">Active Clients</p><p className="text-2xl font-bold text-foreground">{billingByClient.length}</p></div></div></CardContent></Card>
       </div>
 
       <Tabs defaultValue="projects" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="projects" className="gap-2"><Briefcase className="h-4 w-4" />Por Proyecto</TabsTrigger>
-          <TabsTrigger value="clients" className="gap-2"><Users className="h-4 w-4" />Por Cliente</TabsTrigger>
+          <TabsTrigger value="projects" className="gap-2"><Briefcase className="h-4 w-4" />By Project</TabsTrigger>
+          <TabsTrigger value="clients" className="gap-2"><Users className="h-4 w-4" />By Client</TabsTrigger>
         </TabsList>
 
         <TabsContent value="projects" className="space-y-4">
@@ -148,12 +147,12 @@ export default function Billing() {
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10"><Briefcase className="h-5 w-5 text-primary" /></div>
                     <div><CardTitle className="text-lg">{data.projectName}</CardTitle><p className="text-sm text-muted-foreground">{data.clientName}</p></div>
                   </div>
-                  <div className="text-right"><p className="text-2xl font-bold text-primary">${data.totalAmount.toLocaleString()}</p><p className="text-sm text-muted-foreground">{data.totalHours}h totales</p></div>
+                  <div className="text-right"><p className="text-2xl font-bold text-primary">${data.totalAmount.toLocaleString()}</p><p className="text-sm text-muted-foreground">{data.totalHours}h total</p></div>
                 </div>
               </CardHeader>
               <CardContent>
                 <Table>
-                  <TableHeader><TableRow><TableHead className="table-header">Empleado</TableHead><TableHead className="table-header text-right">Horas</TableHead><TableHead className="table-header text-right">Tarifa</TableHead><TableHead className="table-header text-right">Total</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead className="table-header">Employee</TableHead><TableHead className="table-header text-right">Hours</TableHead><TableHead className="table-header text-right">Rate</TableHead><TableHead className="table-header text-right">Total</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {data.employeeDetails.map(employee => (
                       <TableRow key={employee.name}>
@@ -168,7 +167,7 @@ export default function Billing() {
               </CardContent>
             </Card>
           ))}
-          {billingByProject.length === 0 && (<div className="text-center py-12"><Briefcase className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" /><p className="text-muted-foreground">No hay datos de facturación para este mes</p></div>)}
+          {billingByProject.length === 0 && (<div className="text-center py-12"><Briefcase className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" /><p className="text-muted-foreground">No billing data for this month</p></div>)}
         </TabsContent>
 
         <TabsContent value="clients" className="space-y-4">
@@ -178,9 +177,9 @@ export default function Billing() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10"><Users className="h-5 w-5 text-primary" /></div>
-                    <div><CardTitle className="text-lg">{data.clientName}</CardTitle><p className="text-sm text-muted-foreground">{data.projects.length} proyectos</p></div>
+                    <div><CardTitle className="text-lg">{data.clientName}</CardTitle><p className="text-sm text-muted-foreground">{data.projects.length} projects</p></div>
                   </div>
-                  <div className="text-right"><p className="text-2xl font-bold text-primary">${data.totalAmount.toLocaleString()}</p><p className="text-sm text-muted-foreground">{data.totalHours}h totales</p></div>
+                  <div className="text-right"><p className="text-2xl font-bold text-primary">${data.totalAmount.toLocaleString()}</p><p className="text-sm text-muted-foreground">{data.totalHours}h total</p></div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -195,7 +194,7 @@ export default function Billing() {
               </CardContent>
             </Card>
           ))}
-          {billingByClient.length === 0 && (<div className="text-center py-12"><Users className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" /><p className="text-muted-foreground">No hay datos de facturación para este mes</p></div>)}
+          {billingByClient.length === 0 && (<div className="text-center py-12"><Users className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" /><p className="text-muted-foreground">No billing data for this month</p></div>)}
         </TabsContent>
       </Tabs>
     </div>

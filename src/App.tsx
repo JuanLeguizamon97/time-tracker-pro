@@ -25,11 +25,17 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<Navigate to="/" replace />} />
             <Route path="/" element={<MainLayout><Timesheet /></MainLayout>} />
-            <Route path="/historial" element={<MainLayout><History /></MainLayout>} />
-            <Route path="/proyectos" element={<MainLayout><Projects /></MainLayout>} />
-            <Route path="/clientes" element={<MainLayout><Clients /></MainLayout>} />
-            <Route path="/empleados" element={<MainLayout><Employees /></MainLayout>} />
-            <Route path="/facturacion" element={<MainLayout><Billing /></MainLayout>} />
+            <Route path="/history" element={<MainLayout><History /></MainLayout>} />
+            <Route path="/projects" element={<MainLayout><Projects /></MainLayout>} />
+            <Route path="/clients" element={<MainLayout><Clients /></MainLayout>} />
+            <Route path="/employees" element={<MainLayout><Employees /></MainLayout>} />
+            <Route path="/billing" element={<MainLayout><Billing /></MainLayout>} />
+            {/* Legacy Spanish routes */}
+            <Route path="/historial" element={<Navigate to="/history" replace />} />
+            <Route path="/proyectos" element={<Navigate to="/projects" replace />} />
+            <Route path="/clientes" element={<Navigate to="/clients" replace />} />
+            <Route path="/empleados" element={<Navigate to="/employees" replace />} />
+            <Route path="/facturacion" element={<Navigate to="/billing" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

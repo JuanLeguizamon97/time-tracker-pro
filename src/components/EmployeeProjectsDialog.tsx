@@ -62,10 +62,10 @@ export function EmployeeProjectsDialog({ open, onOpenChange, employee }: Employe
         userId: employee.user_id,
         assignments: assignmentItems,
       });
-      toast.success('Proyectos asignados correctamente');
+      toast.success("Saved — you're all set.");
       onOpenChange(false);
     } catch (error) {
-      toast.error('Error al asignar proyectos');
+      toast.error('Something went wrong. Please try again.');
       console.error(error);
     }
   };
@@ -78,10 +78,10 @@ export function EmployeeProjectsDialog({ open, onOpenChange, employee }: Employe
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderKanban className="h-5 w-5" />
-            Asignar Proyectos
+            Assign Projects
           </DialogTitle>
           <DialogDescription>
-            Selecciona los proyectos para {employee?.name}
+            Select projects for {employee?.name}
           </DialogDescription>
         </DialogHeader>
 
@@ -93,13 +93,13 @@ export function EmployeeProjectsDialog({ open, onOpenChange, employee }: Employe
           <div className="max-h-[300px] overflow-y-auto space-y-3 py-4">
             {projects.length === 0 ? (
               <p className="text-center text-muted-foreground py-4">
-                No hay proyectos activos disponibles
+                No active projects available
               </p>
             ) : (
               projects.map(project => (
                 <div
                   key={project.id}
-                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50"
+                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors duration-150"
                 >
                   <Checkbox
                     id={project.id}
@@ -120,11 +120,11 @@ export function EmployeeProjectsDialog({ open, onOpenChange, employee }: Employe
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
+            Cancel
           </Button>
           <Button onClick={handleSave} disabled={bulkAssign.isPending}>
             {bulkAssign.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Guardar
+            Save
           </Button>
         </DialogFooter>
       </DialogContent>

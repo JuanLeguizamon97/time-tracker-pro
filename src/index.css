@@ -2,11 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
+    --background: 220 60% 98%;
     --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
@@ -15,48 +15,48 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 224 76% 48%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96%;
+    --secondary: 214 32% 95%;
     --secondary-foreground: 222 47% 11%;
 
-    --muted: 210 40% 96%;
+    --muted: 214 32% 95%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 221 83% 53%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 213 94% 68%;
+    --accent-foreground: 222 47% 11%;
 
     --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 100%;
 
     --success: 142 76% 36%;
-    --success-foreground: 210 40% 98%;
+    --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
     --warning-foreground: 222 47% 11%;
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 221 83% 53%;
+    --ring: 224 76% 48%;
 
-    --radius: 0.75rem;
+    --radius: 0.625rem;
 
     --sidebar-background: 222 47% 11%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 221 83% 53%;
-    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-primary: 224 76% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 222 47% 18%;
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 222 47% 18%;
-    --sidebar-ring: 221 83% 53%;
+    --sidebar-ring: 224 76% 48%;
     --sidebar-muted: 215 16% 65%;
 
     /* Custom tokens */
-    --gradient-primary: linear-gradient(135deg, hsl(221 83% 53%) 0%, hsl(250 83% 60%) 100%);
-    --shadow-sm: 0 1px 2px 0 hsl(222 47% 11% / 0.05);
-    --shadow-md: 0 4px 6px -1px hsl(222 47% 11% / 0.1), 0 2px 4px -2px hsl(222 47% 11% / 0.1);
-    --shadow-lg: 0 10px 15px -3px hsl(222 47% 11% / 0.1), 0 4px 6px -4px hsl(222 47% 11% / 0.1);
+    --gradient-primary: linear-gradient(135deg, hsl(224 76% 48%) 0%, hsl(213 94% 68%) 100%);
+    --shadow-sm: 0 1px 2px 0 hsl(222 47% 11% / 0.04);
+    --shadow-md: 0 4px 12px -2px hsl(222 47% 11% / 0.08), 0 2px 4px -2px hsl(222 47% 11% / 0.04);
+    --shadow-lg: 0 12px 24px -4px hsl(222 47% 11% / 0.1), 0 4px 8px -4px hsl(222 47% 11% / 0.06);
   }
 
   .dark {
@@ -69,8 +69,8 @@
     --popover: 222 47% 14%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 213 94% 68%;
+    --primary-foreground: 222 47% 11%;
 
     --secondary: 217 33% 17%;
     --secondary-foreground: 210 40% 98%;
@@ -93,15 +93,15 @@
     --border: 217 33% 17%;
     --input: 217 33% 17%;
     --ring: 213 27% 84%;
-    
+
     --sidebar-background: 222 47% 8%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 221 83% 53%;
-    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-primary: 213 94% 68%;
+    --sidebar-primary-foreground: 222 47% 11%;
     --sidebar-accent: 222 47% 14%;
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 222 47% 14%;
-    --sidebar-ring: 221 83% 53%;
+    --sidebar-ring: 213 94% 68%;
   }
 }
 
@@ -114,6 +114,10 @@
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', system-ui, sans-serif;
   }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  }
 }
 
 @layer components {
@@ -122,7 +126,7 @@
   }
 
   .stat-card {
-    @apply bg-card rounded-xl p-6 shadow-sm border border-border/50 transition-all hover:shadow-md;
+    @apply bg-card rounded-xl p-6 shadow-sm border border-border/50 transition-all duration-200 hover:shadow-md;
   }
 
   .table-header {
@@ -136,6 +140,6 @@
 
   .time-input {
     @apply w-16 h-10 text-center font-medium bg-secondary border border-border rounded-lg 
-           focus:ring-2 focus:ring-primary focus:border-transparent transition-all;
+           focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200;
   }
 }
