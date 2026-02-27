@@ -254,38 +254,51 @@ export default function Timesheet() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0 space-y-2">
+              <CardContent className="pt-0 space-y-1.5">
                 {entries.map((entry, entryIndex) => {
                   const noteKey = `${dayIndex}-${entryIndex}`;
+                  const fullName = entry.clientName
+                    ? `${entry.projectName} (${entry.clientName})`
+                    : entry.projectName;
                   return (
-                    <div key={entry.projectId} className="flex flex-col gap-1.5 p-3 bg-muted/30 rounded-lg">
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <div className="min-w-[160px]">
-                          <span className="font-medium text-sm text-foreground">{entry.projectName}</span>
-                          {entry.clientName && <span className="text-xs text-muted-foreground ml-1.5">({entry.clientName})</span>}
-                          {entry.isInternal && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0">Internal</Badge>}
-                        </div>
+                    <div key={entry.projectId} className="flex flex-col gap-1.5 p-2.5 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {/* Project info — fills remaining space, truncates */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-hidden">
+                              <span className="font-medium text-sm text-foreground truncate">{entry.projectName}</span>
+                              {entry.clientName && (
+                                <span className="text-xs text-muted-foreground truncate shrink-0 max-w-[120px]">({entry.clientName})</span>
+                              )}
+                              {entry.isInternal && <Badge variant="secondary" className="shrink-0 text-[10px] px-1 py-0">Internal</Badge>}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">{fullName}</TooltipContent>
+                        </Tooltip>
 
-                        <div className="flex items-center gap-1.5">
+                        {/* Hours — fixed 80px + label */}
+                        <div className="flex items-center gap-1 shrink-0 w-[112px]">
                           <Input
                             type="number" min="0" max="24" step="0.5"
                             value={entry.hours || ''}
                             onChange={(e) => handleUpdateEntry(dayIndex, entryIndex, { hours: parseFloat(e.target.value) || 0 })}
-                            className="w-20 h-9" placeholder="0"
+                            className="w-[76px] h-8 text-center" placeholder="0"
                           />
-                          <span className="text-sm text-muted-foreground">hrs</span>
+                          <span className="text-xs text-muted-foreground w-[32px]">hrs</span>
                         </div>
 
+                        {/* Billable toggle — fixed width */}
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 shrink-0 w-[130px]">
                               <Switch
                                 checked={entry.billable}
                                 onCheckedChange={(v) => handleUpdateEntry(dayIndex, entryIndex, { billable: v })}
                                 disabled={entry.isInternal}
                                 className="h-5 w-9"
                               />
-                              <Label className={`text-xs ${entry.billable ? 'text-success' : 'text-muted-foreground'}`}>
+                              <Label className={`text-xs whitespace-nowrap ${entry.billable ? 'text-success' : 'text-muted-foreground'}`}>
                                 {entry.billable ? 'Billable' : 'Non-billable'}
                               </Label>
                             </div>
@@ -295,9 +308,10 @@ export default function Timesheet() {
                           )}
                         </Tooltip>
 
+                        {/* Notes icon — fixed width */}
                         <Button
                           variant="ghost" size="sm"
-                          className={`h-8 px-2 ${entry.notes ? 'text-primary' : 'text-muted-foreground'}`}
+                          className={`shrink-0 h-8 w-10 px-0 ${entry.notes ? 'text-primary' : 'text-muted-foreground'}`}
                           onClick={() => setExpandedNotes(expandedNotes === noteKey ? null : noteKey)}
                         >
                           <MessageSquare className="h-4 w-4" />
