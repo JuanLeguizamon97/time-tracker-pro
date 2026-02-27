@@ -18,6 +18,9 @@ export interface Client {
   email: string | null;
   phone: string | null;
   is_active: boolean;
+  manager_name: string | null;
+  manager_email: string | null;
+  manager_phone: string | null;
   created_at: string;
 }
 
@@ -85,8 +88,42 @@ export interface Invoice {
   discount: number;
   total: number;
   notes: string | null;
+  invoice_number: string | null;
+  issue_date: string | null;
+  due_date: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface InvoiceManualLine {
+  id: string;
+  invoice_id: string;
+  person_name: string;
+  hours: number;
+  rate_usd: number;
+  description: string | null;
+  line_total: number;
+  created_at: string;
+}
+
+export interface InvoiceFee {
+  id: string;
+  invoice_id: string;
+  label: string;
+  quantity: number;
+  unit_price_usd: number;
+  description: string | null;
+  fee_total: number;
+  created_at: string;
+}
+
+export interface InvoiceFeeAttachment {
+  id: string;
+  fee_id: string;
+  file_name: string;
+  file_url: string;
+  file_size: number | null;
+  created_at: string;
 }
 
 export interface InvoiceLine {
