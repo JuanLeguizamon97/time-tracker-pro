@@ -15,11 +15,17 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { EmployeeProjectsDialog } from '@/components/EmployeeProjectsDialog';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 function useEmployeeRoles() {
   return useQuery({
@@ -32,20 +38,57 @@ function useEmployeeRoles() {
   });
 }
 
+function useUpdateRole() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, newRole }: { userId: string; newRole: AppRole }) => {
+      // Check if user already has a role row
+      const { data: existing } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('user_roles')
+          .update({ role: newRole })
+          .eq('user_id', userId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('user_roles')
+          .insert({ user_id: userId, role: newRole });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-roles'] });
+    },
+  });
+}
+
 export default function Employees() {
   const { data: employees = [], isLoading } = useEmployees();
   const { data: allAssignments = [] } = useAssignedProjects();
   const { data: roles = [] } = useEmployeeRoles();
+  const { employee: currentUser } = useAuth();
   const updateEmployee = useUpdateEmployee();
+  const updateRole = useUpdateRole();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isProjectsDialogOpen, setIsProjectsDialogOpen] = useState(false);
+  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
+  const [isSelfDemoteAlertOpen, setIsSelfDemoteAlertOpen] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [roleTarget, setRoleTarget] = useState<Employee | null>(null);
+  const [pendingRole, setPendingRole] = useState<AppRole>('employee');
   const [formData, setFormData] = useState({ name: '' });
 
   const getRole = (userId: string): AppRole => roles.find(r => r.user_id === userId)?.role || 'employee';
+  const adminCount = roles.filter(r => r.role === 'admin').length;
 
   const filteredEmployees = employees.filter(
     emp => emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || emp.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -60,6 +103,47 @@ export default function Employees() {
   };
 
   const handleOpenProjects = (emp: Employee) => { setSelectedEmployee(emp); setIsProjectsDialogOpen(true); };
+
+  const handleOpenRoleDialog = (emp: Employee) => {
+    setRoleTarget(emp);
+    setPendingRole(getRole(emp.user_id));
+    setIsRoleDialogOpen(true);
+  };
+
+  const handleSaveRole = async () => {
+    if (!roleTarget) return;
+    const currentRole = getRole(roleTarget.user_id);
+    if (pendingRole === currentRole) { setIsRoleDialogOpen(false); return; }
+
+    // Last admin guard
+    if (currentRole === 'admin' && pendingRole === 'employee' && adminCount <= 1) {
+      toast.error("You can't remove the last admin.");
+      return;
+    }
+
+    // Self-demotion warning
+    const isSelf = currentUser?.user_id === roleTarget.user_id;
+    if (isSelf && currentRole === 'admin' && pendingRole === 'employee') {
+      setIsRoleDialogOpen(false);
+      setIsSelfDemoteAlertOpen(true);
+      return;
+    }
+
+    await executeRoleChange();
+  };
+
+  const executeRoleChange = async () => {
+    if (!roleTarget) return;
+    try {
+      await updateRole.mutateAsync({ userId: roleTarget.user_id, newRole: pendingRole });
+      toast.success('Role updated.');
+      setIsRoleDialogOpen(false);
+      setIsSelfDemoteAlertOpen(false);
+      setRoleTarget(null);
+    } catch {
+      toast.error('Something went wrong. Please try again.');
+    }
+  };
 
   const handleSubmit = async () => {
     if (!formData.name) { toast.error('Please fill in all fields correctly.'); return; }
@@ -97,7 +181,7 @@ export default function Employees() {
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success/10"><UserCircle className="h-6 w-6 text-success" /></div>
-              <div><p className="text-sm text-muted-foreground">Admins</p><p className="text-2xl font-bold text-foreground">{roles.filter(r => r.role === 'admin').length}</p></div>
+              <div><p className="text-sm text-muted-foreground">Admins</p><p className="text-2xl font-bold text-foreground">{adminCount}</p></div>
             </div>
           </CardContent>
         </Card>
@@ -118,7 +202,7 @@ export default function Employees() {
               <TableRow>
                 <TableHead className="table-header">Employee</TableHead>
                 <TableHead className="table-header">Email</TableHead>
-                <TableHead className="table-header">Role</TableHead>
+                <TableHead className="table-header">App Role</TableHead>
                 <TableHead className="table-header">Projects</TableHead>
                 <TableHead className="table-header text-right">Actions</TableHead>
               </TableRow>
@@ -148,6 +232,7 @@ export default function Employees() {
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleEdit(emp)}><Edit className="h-4 w-4 mr-2" />Edit</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenRoleDialog(emp)}><Shield className="h-4 w-4 mr-2" />Change Role</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleOpenProjects(emp)}><FolderKanban className="h-4 w-4 mr-2" />Assign Projects</DropdownMenuItem>
                           <DropdownMenuSeparator />
                         </DropdownMenuContent>
@@ -164,6 +249,7 @@ export default function Employees() {
         </CardContent>
       </Card>
 
+      {/* Edit Employee Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -182,6 +268,50 @@ export default function Employees() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Change Role Dialog */}
+      <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change Role</DialogTitle>
+            <DialogDescription>Update the app role for {roleTarget?.name}.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Role</Label>
+              <Select value={pendingRole} onValueChange={(v) => setPendingRole(v as AppRole)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="employee">Employee</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveRole} disabled={updateRole.isPending}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Self-Demotion Confirmation */}
+      <AlertDialog open={isSelfDemoteAlertOpen} onOpenChange={setIsSelfDemoteAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You're changing your own role. This may remove your admin access.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={executeRoleChange}>Continue</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <EmployeeProjectsDialog open={isProjectsDialogOpen} onOpenChange={setIsProjectsDialogOpen} employee={selectedEmployee} />
     </div>
