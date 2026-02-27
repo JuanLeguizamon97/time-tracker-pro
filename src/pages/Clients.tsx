@@ -26,7 +26,7 @@ export default function Clients() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', phone: '', manager_name: '', manager_email: '', manager_phone: '' });
 
   const filteredClients = clients.filter(
     client =>
@@ -50,7 +50,14 @@ export default function Clients() {
       if (editingClientId) {
         await updateClient.mutateAsync({
           id: editingClientId,
-          updates: { name: formData.name, email: formData.email || null, phone: formData.phone || null },
+          updates: {
+            name: formData.name,
+            email: formData.email || null,
+            phone: formData.phone || null,
+            manager_name: formData.manager_name || null,
+            manager_email: formData.manager_email || null,
+            manager_phone: formData.manager_phone || null,
+          },
         });
         toast.success("Saved — you're all set.");
       } else {
@@ -58,17 +65,20 @@ export default function Clients() {
           name: formData.name,
           email: formData.email || undefined,
           phone: formData.phone || undefined,
+          manager_name: formData.manager_name || undefined,
+          manager_email: formData.manager_email || undefined,
+          manager_phone: formData.manager_phone || undefined,
         });
         toast.success('Client created successfully.');
       }
-      setFormData({ name: '', email: '', phone: '' });
+      setFormData({ name: '', email: '', phone: '', manager_name: '', manager_email: '', manager_phone: '' });
       setEditingClientId(null);
       setIsDialogOpen(false);
     } catch { toast.error('Something went wrong. Please try again.'); }
   };
 
   const handleEdit = (client: typeof clients[0]) => {
-    setFormData({ name: client.name, email: client.email || '', phone: client.phone || '' });
+    setFormData({ name: client.name, email: client.email || '', phone: client.phone || '', manager_name: client.manager_name || '', manager_email: client.manager_email || '', manager_phone: client.manager_phone || '' });
     setEditingClientId(client.id);
     setIsDialogOpen(true);
   };
@@ -93,7 +103,7 @@ export default function Clients() {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2" onClick={() => { setEditingClientId(null); setFormData({ name: '', email: '', phone: '' }); }}>
+            <Button className="gap-2" onClick={() => { setEditingClientId(null); setFormData({ name: '', email: '', phone: '', manager_name: '', manager_email: '', manager_phone: '' }); }}>
               <Plus className="h-4 w-4" /> New Client
             </Button>
           </DialogTrigger>
@@ -114,6 +124,23 @@ export default function Clients() {
               <div className="grid gap-2">
                 <Label htmlFor="phone">Phone</Label>
                 <Input id="phone" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+1 (555) 123-4567" />
+              </div>
+              <div className="border-t pt-4 mt-2">
+                <p className="text-sm font-medium text-muted-foreground mb-3">Manager / Responsible Contact</p>
+                <div className="grid gap-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="manager_name">Manager Name</Label>
+                    <Input id="manager_name" value={formData.manager_name} onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })} placeholder="John Smith" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="manager_email">Manager Email</Label>
+                    <Input id="manager_email" type="email" value={formData.manager_email} onChange={(e) => setFormData({ ...formData, manager_email: e.target.value })} placeholder="john@company.com" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="manager_phone">Manager Phone</Label>
+                    <Input id="manager_phone" value={formData.manager_phone} onChange={(e) => setFormData({ ...formData, manager_phone: e.target.value })} placeholder="+1 (555) 987-6543" />
+                  </div>
+                </div>
               </div>
             </div>
             <DialogFooter>

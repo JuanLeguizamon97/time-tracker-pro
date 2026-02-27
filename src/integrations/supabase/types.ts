@@ -20,6 +20,9 @@ export type Database = {
           email: string | null
           id: string
           is_active: boolean
+          manager_email: string | null
+          manager_name: string | null
+          manager_phone: string | null
           name: string
           phone: string | null
         }
@@ -28,6 +31,9 @@ export type Database = {
           email?: string | null
           id?: string
           is_active?: boolean
+          manager_email?: string | null
+          manager_name?: string | null
+          manager_phone?: string | null
           name: string
           phone?: string | null
         }
@@ -36,6 +42,9 @@ export type Database = {
           email?: string | null
           id?: string
           is_active?: boolean
+          manager_email?: string | null
+          manager_name?: string | null
+          manager_phone?: string | null
           name?: string
           phone?: string | null
         }
@@ -79,6 +88,82 @@ export type Database = {
             columns: ["role_id"]
             isOneToOne: false
             referencedRelation: "project_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_fee_attachments: {
+        Row: {
+          created_at: string
+          fee_id: string
+          file_name: string
+          file_size: number | null
+          file_url: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          fee_id: string
+          file_name: string
+          file_size?: number | null
+          file_url: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          fee_id?: string
+          file_name?: string
+          file_size?: number | null
+          file_url?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_fee_attachments_fee_id_fkey"
+            columns: ["fee_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_fees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_fees: {
+        Row: {
+          created_at: string
+          description: string | null
+          fee_total: number
+          id: string
+          invoice_id: string
+          label: string
+          quantity: number
+          unit_price_usd: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          fee_total?: number
+          id?: string
+          invoice_id: string
+          label: string
+          quantity?: number
+          unit_price_usd?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          fee_total?: number
+          id?: string
+          invoice_id?: string
+          label?: string
+          quantity?: number
+          unit_price_usd?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_fees_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
             referencedColumns: ["id"]
           },
         ]
@@ -127,6 +212,47 @@ export type Database = {
           },
         ]
       }
+      invoice_manual_lines: {
+        Row: {
+          created_at: string
+          description: string | null
+          hours: number
+          id: string
+          invoice_id: string
+          line_total: number
+          person_name: string
+          rate_usd: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          hours?: number
+          id?: string
+          invoice_id: string
+          line_total?: number
+          person_name: string
+          rate_usd?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          hours?: number
+          id?: string
+          invoice_id?: string
+          line_total?: number
+          person_name?: string
+          rate_usd?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_manual_lines_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_time_entries: {
         Row: {
           created_at: string
@@ -167,7 +293,10 @@ export type Database = {
         Row: {
           created_at: string
           discount: number
+          due_date: string | null
           id: string
+          invoice_number: string | null
+          issue_date: string | null
           notes: string | null
           project_id: string
           status: string
@@ -178,7 +307,10 @@ export type Database = {
         Insert: {
           created_at?: string
           discount?: number
+          due_date?: string | null
           id?: string
+          invoice_number?: string | null
+          issue_date?: string | null
           notes?: string | null
           project_id: string
           status?: string
@@ -189,7 +321,10 @@ export type Database = {
         Update: {
           created_at?: string
           discount?: number
+          due_date?: string | null
           id?: string
+          invoice_number?: string | null
+          issue_date?: string | null
           notes?: string | null
           project_id?: string
           status?: string
