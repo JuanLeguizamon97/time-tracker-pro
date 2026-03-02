@@ -24,8 +24,9 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { useInvoiceFeeAttachments } from '@/hooks/useInvoiceExtras';
 
 const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'bg-muted text-muted-foreground' },
@@ -37,14 +38,7 @@ const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string }> = {
 
 // ── Fee Attachments sub-component ──
 function FeeAttachments({ feeId, isEditable }: { feeId: string; isEditable: boolean }) {
-  const { data: attachments = [] } = useQuery({
-    queryKey: ['invoice-fee-attachments', feeId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('invoice_fee_attachments').select('*').eq('fee_id', feeId);
-      if (error) throw error;
-      return data as InvoiceFeeAttachment[];
-    },
-  });
+  const { data: attachments = [] } = useInvoiceFeeAttachments(feeId);
   const createAttachment = useCreateFeeAttachment();
   const deleteAttachment = useDeleteFeeAttachment();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -52,12 +46,10 @@ function FeeAttachments({ feeId, isEditable }: { feeId: string; isEditable: bool
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const filePath = `${feeId}/${Date.now()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage.from('invoice-attachments').upload(filePath, file);
-    if (uploadError) { toast.error('Failed to upload file.'); return; }
-    const { data: urlData } = supabase.storage.from('invoice-attachments').getPublicUrl(filePath);
-    await createAttachment.mutateAsync({ fee_id: feeId, file_name: file.name, file_url: urlData.publicUrl, file_size: file.size });
-    toast.success('File uploaded.');
+    try {
+      await createAttachment.mutateAsync({ feeId, file });
+      toast.success('File uploaded.');
+    } catch { toast.error('Failed to upload file.'); }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -286,17 +278,18 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
     if (!invoice || !isEditable) return;
     try {
       let newBilledSubtotal = 0;
+      const assignments = await api.get<{ user_id: string; role_id: string | null }[]>(`/employee-projects?project_id=${invoice.project_id}`);
+      const assignmentMap = new Map(assignments.map(a => [a.user_id, a.role_id]));
       for (const line of lines) {
-        const { data: assignment } = await supabase
-          .from('employee_projects').select('role_id').eq('user_id', line.user_id).eq('project_id', invoice.project_id).maybeSingle();
         let newRate = Number(line.rate_snapshot);
-        if (assignment?.role_id) {
-          const role = projectRoles.find(r => r.id === assignment.role_id);
+        const roleId = assignmentMap.get(line.user_id);
+        if (roleId) {
+          const role = projectRoles.find(r => r.id === roleId);
           if (role) newRate = Number(role.hourly_rate_usd);
         }
         const newAmount = Number(line.hours) * newRate;
         newBilledSubtotal += newAmount;
-        await updateLine.mutateAsync({ id: line.id, updates: { rate_snapshot: newRate, amount: newAmount, role_name: projectRoles.find(r => r.id === assignment?.role_id)?.name || line.role_name } });
+        await updateLine.mutateAsync({ id: line.id, updates: { rate_snapshot: newRate, amount: newAmount, role_name: projectRoles.find(r => r.id === assignmentMap.get(line.user_id))?.name || line.role_name } });
       }
       const total = newBilledSubtotal + manualSubtotal + feesSubtotal - discountVal;
       await updateInvoice.mutateAsync({ id: invoice.id, updates: { subtotal: newBilledSubtotal + manualSubtotal + feesSubtotal, total } });
@@ -309,20 +302,22 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
     if (!invoice) return;
     try {
       const unpaid = allInvoices.filter(i => i.project_id === invoice.project_id && (i.status === 'draft' || i.status === 'sent'));
+      const assignments = await api.get<{ user_id: string; role_id: string | null }[]>(`/employee-projects?project_id=${invoice.project_id}`);
+      const assignmentMap = new Map(assignments.map(a => [a.user_id, a.role_id]));
       let count = 0;
       for (const inv of unpaid) {
-        const { data: invLines } = await supabase.from('invoice_lines').select('*').eq('invoice_id', inv.id);
+        const invLines = await api.get<InvoiceLine[]>(`/invoice-lines?invoice_id=${inv.id}`);
         if (!invLines?.length) continue;
         let sub = 0;
         for (const line of invLines) {
-          const { data: assignment } = await supabase.from('employee_projects').select('role_id').eq('user_id', line.user_id).eq('project_id', inv.project_id).maybeSingle();
           let r = Number(line.rate_snapshot);
-          if (assignment?.role_id) { const role = projectRoles.find(pr => pr.id === assignment.role_id); if (role) r = Number(role.hourly_rate_usd); }
+          const roleId = assignmentMap.get(line.user_id);
+          if (roleId) { const role = projectRoles.find(pr => pr.id === roleId); if (role) r = Number(role.hourly_rate_usd); }
           const a = Number(line.hours) * r;
           sub += a;
-          await supabase.from('invoice_lines').update({ rate_snapshot: r, amount: a }).eq('id', line.id);
+          await updateLine.mutateAsync({ id: line.id, updates: { rate_snapshot: r, amount: a } });
         }
-        await supabase.from('invoices').update({ subtotal: sub, total: sub - Number(inv.discount) }).eq('id', inv.id);
+        await updateInvoice.mutateAsync({ id: inv.id, updates: { subtotal: sub, total: sub - Number(inv.discount) } });
         count++;
       }
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -337,18 +332,20 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
       const unpaid = allInvoices.filter(i => i.project_id === invoice.project_id && (i.status === 'draft' || i.status === 'sent')).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       if (!unpaid.length) { toast.info('No unpaid invoices.'); return; }
       const latest = unpaid[0];
-      const { data: invLines } = await supabase.from('invoice_lines').select('*').eq('invoice_id', latest.id);
+      const invLines = await api.get<InvoiceLine[]>(`/invoice-lines?invoice_id=${latest.id}`);
       if (!invLines?.length) { toast.info('No lines.'); return; }
+      const assignments = await api.get<{ user_id: string; role_id: string | null }[]>(`/employee-projects?project_id=${latest.project_id}`);
+      const assignmentMap = new Map(assignments.map(a => [a.user_id, a.role_id]));
       let sub = 0;
       for (const line of invLines) {
-        const { data: assignment } = await supabase.from('employee_projects').select('role_id').eq('user_id', line.user_id).eq('project_id', latest.project_id).maybeSingle();
         let r = Number(line.rate_snapshot);
-        if (assignment?.role_id) { const role = projectRoles.find(pr => pr.id === assignment.role_id); if (role) r = Number(role.hourly_rate_usd); }
+        const roleId = assignmentMap.get(line.user_id);
+        if (roleId) { const role = projectRoles.find(pr => pr.id === roleId); if (role) r = Number(role.hourly_rate_usd); }
         const a = Number(line.hours) * r;
         sub += a;
-        await supabase.from('invoice_lines').update({ rate_snapshot: r, amount: a }).eq('id', line.id);
+        await updateLine.mutateAsync({ id: line.id, updates: { rate_snapshot: r, amount: a } });
       }
-      await supabase.from('invoices').update({ subtotal: sub, total: sub - Number(latest.discount) }).eq('id', latest.id);
+      await updateInvoice.mutateAsync({ id: latest.id, updates: { subtotal: sub, total: sub - Number(latest.discount) } });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['invoice-lines'] });
       toast.success('Recalculated latest unpaid invoice.');
@@ -726,20 +723,21 @@ export default function Invoices() {
     if (!selectedProjectId) { toast.error('Please select a project.'); return; }
     try {
       const invoice = await createInvoice.mutateAsync({ project_id: selectedProjectId });
-      const { data: existingLinked } = await supabase.from('invoice_time_entries').select('time_entry_id');
-      const linkedIds = new Set((existingLinked || []).map(e => e.time_entry_id));
-      const { data: entries } = await supabase.from('time_entries').select('*').eq('project_id', selectedProjectId).eq('billable', true).eq('status', 'normal');
-      const availableEntries = (entries || []).filter(e => !linkedIds.has(e.id));
+      const linkedIds = new Set(await api.get<string[]>('/invoice-time-entries/linked-ids'));
+      const entries = await api.get<{ id: string; user_id: string; hours: number; billable: boolean; status: string }[]>(
+        `/time-entries?project_id=${selectedProjectId}&billable=true&status=normal`
+      );
+      const availableEntries = entries.filter(e => !linkedIds.has(e.id));
 
       if (availableEntries.length === 0) {
         toast.success('Invoice created (no billable entries to add yet).');
         setIsCreateOpen(false); setSelectedProjectId(''); return;
       }
 
-      const { data: projectRoles } = await supabase.from('project_roles').select('*').eq('project_id', selectedProjectId);
-      const { data: assignments } = await supabase.from('employee_projects').select('user_id, role_id').eq('project_id', selectedProjectId);
-      const assignmentMap = new Map((assignments || []).map(a => [a.user_id, a.role_id]));
-      const rolesMap = new Map((projectRoles || []).map(r => [r.id, r]));
+      const projectRoles = await api.get<{ id: string; name: string; hourly_rate_usd: number }[]>(`/project-roles?project_id=${selectedProjectId}`);
+      const assignments = await api.get<{ user_id: string; role_id: string | null }[]>(`/employee-projects?project_id=${selectedProjectId}`);
+      const assignmentMap = new Map(assignments.map(a => [a.user_id, a.role_id]));
+      const rolesMap = new Map(projectRoles.map(r => [r.id, r]));
 
       const employeeHours: Record<string, { hours: number; userId: string; name: string; entryIds: string[] }> = {};
       availableEntries.forEach(entry => {
@@ -758,8 +756,8 @@ export default function Invoices() {
       });
 
       await createLines.mutateAsync(lineData);
-      const links = Object.values(employeeHours).flatMap(eh => eh.entryIds.map(id => ({ invoice_id: invoice.id, time_entry_id: id })));
-      await linkTimeEntries.mutateAsync(links);
+      const timeEntryIds = Object.values(employeeHours).flatMap(eh => eh.entryIds);
+      await linkTimeEntries.mutateAsync({ invoice_id: invoice.id, time_entry_ids: timeEntryIds });
       const subtotalVal = lineData.reduce((sum, l) => sum + l.amount, 0);
       await updateInvoice.mutateAsync({ id: invoice.id, updates: { subtotal: subtotalVal, total: subtotalVal } });
       toast.success(`Invoice created with ${availableEntries.length} entries.`);

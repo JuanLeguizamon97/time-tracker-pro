@@ -1,49 +1,26 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import { Project } from '@/types';
 
 export function useProjects() {
   return useQuery({
     queryKey: ['projects'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      return data as Project[];
-    },
+    queryFn: () => api.get<Project[]>('/projects'),
   });
 }
 
 export function useActiveProjects() {
   return useQuery({
     queryKey: ['projects', 'active'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data as Project[];
-    },
+    queryFn: () => api.get<Project[]>('/projects?active=true'),
   });
 }
 
 export function useCreateProject() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async (project: { name: string; client_id: string; description?: string; is_internal?: boolean }) => {
-      const { data, error } = await supabase
-        .from('projects')
-        .insert(project)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Project;
-    },
+    mutationFn: (project: { name: string; client_id: string; description?: string; is_internal?: boolean }) =>
+      api.post<Project>('/projects', project),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
@@ -52,18 +29,9 @@ export function useCreateProject() {
 
 export function useUpdateProject() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Project> }) => {
-      const { data, error } = await supabase
-        .from('projects')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Project;
-    },
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Project> }) =>
+      api.put<Project>(`/projects/${id}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },

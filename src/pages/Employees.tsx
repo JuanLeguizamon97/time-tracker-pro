@@ -24,44 +24,21 @@ import {
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { EmployeeProjectsDialog } from '@/components/EmployeeProjectsDialog';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 function useEmployeeRoles() {
   return useQuery({
     queryKey: ['user-roles'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('user_roles').select('*');
-      if (error) throw error;
-      return data as { id: string; user_id: string; role: AppRole }[];
-    },
+    queryFn: () => api.get<{ id: string; user_id: string; role: AppRole }[]>('/user-roles'),
   });
 }
 
 function useUpdateRole() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ userId, newRole }: { userId: string; newRole: AppRole }) => {
-      // Check if user already has a role row
-      const { data: existing } = await supabase
-        .from('user_roles')
-        .select('id')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (existing) {
-        const { error } = await supabase
-          .from('user_roles')
-          .update({ role: newRole })
-          .eq('user_id', userId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('user_roles')
-          .insert({ user_id: userId, role: newRole });
-        if (error) throw error;
-      }
-    },
+    mutationFn: ({ userId, newRole }: { userId: string; newRole: AppRole }) =>
+      api.put(`/user-roles/${userId}`, { role: newRole }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-roles'] });
     },

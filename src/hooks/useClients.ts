@@ -1,49 +1,26 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import { Client } from '@/types';
 
 export function useClients() {
   return useQuery({
     queryKey: ['clients'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      return data as Client[];
-    },
+    queryFn: () => api.get<Client[]>('/clients'),
   });
 }
 
 export function useActiveClients() {
   return useQuery({
     queryKey: ['clients', 'active'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      if (error) throw error;
-      return data as Client[];
-    },
+    queryFn: () => api.get<Client[]>('/clients?active=true'),
   });
 }
 
 export function useCreateClient() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async (client: { name: string; email?: string; phone?: string; manager_name?: string; manager_email?: string; manager_phone?: string }) => {
-      const { data, error } = await supabase
-        .from('clients')
-        .insert(client)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Client;
-    },
+    mutationFn: (client: { name: string; email?: string; phone?: string; manager_name?: string; manager_email?: string; manager_phone?: string }) =>
+      api.post<Client>('/clients', client),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
     },
@@ -52,18 +29,9 @@ export function useCreateClient() {
 
 export function useUpdateClient() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Client> }) => {
-      const { data, error } = await supabase
-        .from('clients')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Client;
-    },
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Client> }) =>
+      api.put<Client>(`/clients/${id}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
     },

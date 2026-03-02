@@ -1,51 +1,27 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import { Employee } from '@/types';
 
 export function useEmployees() {
   return useQuery({
     queryKey: ['employees'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      return data as Employee[];
-    },
+    queryFn: () => api.get<Employee[]>('/employees'),
   });
 }
 
 export function useEmployee(id: string | undefined) {
   return useQuery({
     queryKey: ['employees', id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', id!)
-        .single();
-      if (error) throw error;
-      return data as Employee;
-    },
+    queryFn: () => api.get<Employee>(`/employees/${id}`),
     enabled: !!id,
   });
 }
 
 export function useUpdateEmployee() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Employee> }) => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Employee;
-    },
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Employee> }) =>
+      api.put<Employee>(`/employees/${id}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
     },
@@ -54,15 +30,8 @@ export function useUpdateEmployee() {
 
 export function useDeleteEmployee() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api.delete<void>(`/employees/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
     },

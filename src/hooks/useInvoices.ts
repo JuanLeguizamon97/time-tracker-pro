@@ -1,18 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { Invoice, InvoiceLine, InvoiceTimeEntry, InvoiceStatus } from '@/types';
+import { api } from '@/lib/api';
+import { Invoice, InvoiceLine, InvoiceTimeEntry } from '@/types';
 
 export function useInvoices() {
   return useQuery({
     queryKey: ['invoices'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as Invoice[];
-    },
+    queryFn: () => api.get<Invoice[]>('/invoices'),
   });
 }
 
@@ -20,15 +13,7 @@ export function useInvoicesByProject(projectId?: string) {
   return useQuery({
     queryKey: ['invoices', 'project', projectId],
     enabled: !!projectId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('project_id', projectId!)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as Invoice[];
-    },
+    queryFn: () => api.get<Invoice[]>(`/invoices?project_id=${projectId}`),
   });
 }
 
@@ -36,14 +21,7 @@ export function useInvoiceLines(invoiceId?: string) {
   return useQuery({
     queryKey: ['invoice-lines', invoiceId],
     enabled: !!invoiceId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('invoice_lines')
-        .select('*')
-        .eq('invoice_id', invoiceId!);
-      if (error) throw error;
-      return data as InvoiceLine[];
-    },
+    queryFn: () => api.get<InvoiceLine[]>(`/invoice-lines?invoice_id=${invoiceId}`),
   });
 }
 
@@ -51,29 +29,15 @@ export function useInvoiceTimeEntries(invoiceId?: string) {
   return useQuery({
     queryKey: ['invoice-time-entries', invoiceId],
     enabled: !!invoiceId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('invoice_time_entries')
-        .select('*')
-        .eq('invoice_id', invoiceId!);
-      if (error) throw error;
-      return data as InvoiceTimeEntry[];
-    },
+    queryFn: () => api.get<InvoiceTimeEntry[]>(`/invoice-time-entries?invoice_id=${invoiceId}`),
   });
 }
 
 export function useCreateInvoice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (invoice: { project_id: string; notes?: string }) => {
-      const { data, error } = await supabase
-        .from('invoices')
-        .insert({ project_id: invoice.project_id, notes: invoice.notes || null, status: 'draft' })
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Invoice;
-    },
+    mutationFn: (invoice: { project_id: string; notes?: string }) =>
+      api.post<Invoice>('/invoices', { project_id: invoice.project_id, notes: invoice.notes || null, status: 'draft' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
@@ -83,16 +47,8 @@ export function useCreateInvoice() {
 export function useUpdateInvoice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Invoice> }) => {
-      const { data, error } = await supabase
-        .from('invoices')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Invoice;
-    },
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<Invoice> }) =>
+      api.put<Invoice>(`/invoices/${id}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
@@ -102,10 +58,7 @@ export function useUpdateInvoice() {
 export function useDeleteInvoice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('invoices').delete().eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api.delete<void>(`/invoices/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
@@ -115,14 +68,8 @@ export function useDeleteInvoice() {
 export function useCreateInvoiceLines() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (lines: Omit<InvoiceLine, 'id' | 'created_at'>[]) => {
-      const { data, error } = await supabase
-        .from('invoice_lines')
-        .insert(lines)
-        .select();
-      if (error) throw error;
-      return data as InvoiceLine[];
-    },
+    mutationFn: (lines: Omit<InvoiceLine, 'id' | 'created_at'>[]) =>
+      api.post<InvoiceLine[]>('/invoice-lines/bulk', lines),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-lines'] });
     },
@@ -132,16 +79,8 @@ export function useCreateInvoiceLines() {
 export function useUpdateInvoiceLine() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<InvoiceLine> }) => {
-      const { data, error } = await supabase
-        .from('invoice_lines')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as InvoiceLine;
-    },
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<InvoiceLine> }) =>
+      api.put<InvoiceLine>(`/invoice-lines/${id}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-lines'] });
     },
@@ -151,10 +90,7 @@ export function useUpdateInvoiceLine() {
 export function useDeleteInvoiceLine() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('invoice_lines').delete().eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api.delete<void>(`/invoice-lines/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-lines'] });
     },
@@ -164,14 +100,8 @@ export function useDeleteInvoiceLine() {
 export function useLinkTimeEntries() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (entries: { invoice_id: string; time_entry_id: string }[]) => {
-      const { data, error } = await supabase
-        .from('invoice_time_entries')
-        .insert(entries)
-        .select();
-      if (error) throw error;
-      return data as InvoiceTimeEntry[];
-    },
+    mutationFn: (entries: { invoice_id: string; time_entry_ids: string[] }) =>
+      api.post<InvoiceTimeEntry[]>('/invoice-time-entries/bulk', entries),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-time-entries'] });
     },

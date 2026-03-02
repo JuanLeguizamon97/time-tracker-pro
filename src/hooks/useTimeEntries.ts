@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import { TimeEntry } from '@/types';
 import { format } from 'date-fns';
 
@@ -9,16 +9,10 @@ export function useTimeEntriesByWeek(weekStart: Date, userId?: string) {
 
   return useQuery({
     queryKey: ['time-entries', 'week', ws, userId],
-    queryFn: async () => {
-      let query = supabase
-        .from('time_entries')
-        .select('*')
-        .gte('date', ws)
-        .lte('date', we);
-      if (userId) query = query.eq('user_id', userId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as TimeEntry[];
+    queryFn: () => {
+      let url = `/time-entries?date_gte=${ws}&date_lte=${we}`;
+      if (userId) url += `&user_id=${userId}`;
+      return api.get<TimeEntry[]>(url);
     },
   });
 }
@@ -29,16 +23,10 @@ export function useTimeEntriesByDateRange(startDate: Date, endDate: Date, userId
 
   return useQuery({
     queryKey: ['time-entries', 'range', gte, lte, userId],
-    queryFn: async () => {
-      let query = supabase
-        .from('time_entries')
-        .select('*')
-        .gte('date', gte)
-        .lte('date', lte);
-      if (userId) query = query.eq('user_id', userId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as TimeEntry[];
+    queryFn: () => {
+      let url = `/time-entries?date_gte=${gte}&date_lte=${lte}`;
+      if (userId) url += `&user_id=${userId}`;
+      return api.get<TimeEntry[]>(url);
     },
   });
 }
@@ -49,31 +37,15 @@ export function useAllTimeEntriesByDateRange(startDate: Date, endDate: Date) {
 
   return useQuery({
     queryKey: ['time-entries', 'range-all', gte, lte],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('time_entries')
-        .select('*')
-        .gte('date', gte)
-        .lte('date', lte);
-      if (error) throw error;
-      return data as TimeEntry[];
-    },
+    queryFn: () => api.get<TimeEntry[]>(`/time-entries?date_gte=${gte}&date_lte=${lte}`),
   });
 }
 
 export function useCreateTimeEntry() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async (entry: Omit<TimeEntry, 'id' | 'created_at'>) => {
-      const { data, error } = await supabase
-        .from('time_entries')
-        .insert(entry)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as TimeEntry;
-    },
+    mutationFn: (entry: Omit<TimeEntry, 'id' | 'created_at'>) =>
+      api.post<TimeEntry>('/time-entries', entry),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['time-entries'] });
     },
@@ -82,18 +54,9 @@ export function useCreateTimeEntry() {
 
 export function useUpdateTimeEntry() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<TimeEntry> }) => {
-      const { data, error } = await supabase
-        .from('time_entries')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as TimeEntry;
-    },
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<TimeEntry> }) =>
+      api.put<TimeEntry>(`/time-entries/${id}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['time-entries'] });
     },
@@ -102,15 +65,8 @@ export function useUpdateTimeEntry() {
 
 export function useDeleteTimeEntry() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('time_entries')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api.delete<void>(`/time-entries/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['time-entries'] });
     },

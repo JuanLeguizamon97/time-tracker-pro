@@ -1,35 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import { ProjectRole } from '@/types';
 
 export function useProjectRoles(projectId?: string) {
   return useQuery({
     queryKey: ['project-roles', projectId],
     enabled: !!projectId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('project_roles')
-        .select('*')
-        .eq('project_id', projectId!)
-        .order('name');
-      if (error) throw error;
-      return data as ProjectRole[];
-    },
+    queryFn: () => api.get<ProjectRole[]>(`/project-roles?project_id=${projectId}`),
   });
 }
 
 export function useCreateProjectRole() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (role: { project_id: string; name: string; hourly_rate_usd: number }) => {
-      const { data, error } = await supabase
-        .from('project_roles')
-        .insert(role)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as ProjectRole;
-    },
+    mutationFn: (role: { project_id: string; name: string; hourly_rate_usd: number }) =>
+      api.post<ProjectRole>('/project-roles', role),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-roles'] });
     },
@@ -39,16 +24,8 @@ export function useCreateProjectRole() {
 export function useUpdateProjectRole() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<ProjectRole> }) => {
-      const { data, error } = await supabase
-        .from('project_roles')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as ProjectRole;
-    },
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<ProjectRole> }) =>
+      api.put<ProjectRole>(`/project-roles/${id}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-roles'] });
     },
@@ -58,10 +35,7 @@ export function useUpdateProjectRole() {
 export function useDeleteProjectRole() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('project_roles').delete().eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api.delete<void>(`/project-roles/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-roles'] });
     },

@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 
 // ── Roles & Rates Panel ──
@@ -146,7 +146,7 @@ function ProjectAssignmentsPanel({ project }: { project: Project }) {
 
   const handleAssign = async (userId: string) => {
     try {
-      await supabase.from('employee_projects').insert({ user_id: userId, project_id: project.id });
+      await api.post('/employee-projects', { user_id: userId, project_id: project.id });
       queryClient.invalidateQueries({ queryKey: ['assigned-projects'] });
       toast.success("Employee assigned — you're all set.");
     } catch { toast.error('Something went wrong. Please try again.'); }
@@ -154,7 +154,7 @@ function ProjectAssignmentsPanel({ project }: { project: Project }) {
 
   const handleUnassign = async (assignmentId: string) => {
     try {
-      await supabase.from('employee_projects').delete().eq('id', assignmentId);
+      await api.delete(`/employee-projects/${assignmentId}`);
       queryClient.invalidateQueries({ queryKey: ['assigned-projects'] });
       toast.success('Employee removed from project.');
     } catch { toast.error('Something went wrong. Please try again.'); }
@@ -162,7 +162,7 @@ function ProjectAssignmentsPanel({ project }: { project: Project }) {
 
   const handleChangeRole = async (assignmentId: string, roleId: string) => {
     try {
-      await supabase.from('employee_projects').update({ role_id: roleId === '__none__' ? null : roleId }).eq('id', assignmentId);
+      await api.put(`/employee-projects/${assignmentId}`, { role_id: roleId === '__none__' ? null : roleId });
       queryClient.invalidateQueries({ queryKey: ['assigned-projects'] });
       toast.success("Role updated — you're all set.");
     } catch { toast.error('Something went wrong. Please try again.'); }

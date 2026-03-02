@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import { InvoiceManualLine, InvoiceFee, InvoiceFeeAttachment } from '@/types';
 
 // Manual People Lines
@@ -7,29 +7,15 @@ export function useInvoiceManualLines(invoiceId?: string) {
   return useQuery({
     queryKey: ['invoice-manual-lines', invoiceId],
     enabled: !!invoiceId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('invoice_manual_lines')
-        .select('*')
-        .eq('invoice_id', invoiceId!);
-      if (error) throw error;
-      return data as InvoiceManualLine[];
-    },
+    queryFn: () => api.get<InvoiceManualLine[]>(`/invoice-manual-lines?invoice_id=${invoiceId}`),
   });
 }
 
 export function useCreateInvoiceManualLine() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (line: Omit<InvoiceManualLine, 'id' | 'created_at'>) => {
-      const { data, error } = await supabase
-        .from('invoice_manual_lines')
-        .insert(line)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as InvoiceManualLine;
-    },
+    mutationFn: (line: Omit<InvoiceManualLine, 'id' | 'created_at'>) =>
+      api.post<InvoiceManualLine>('/invoice-manual-lines', line),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-manual-lines'] });
     },
@@ -39,16 +25,8 @@ export function useCreateInvoiceManualLine() {
 export function useUpdateInvoiceManualLine() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<InvoiceManualLine> }) => {
-      const { data, error } = await supabase
-        .from('invoice_manual_lines')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as InvoiceManualLine;
-    },
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<InvoiceManualLine> }) =>
+      api.put<InvoiceManualLine>(`/invoice-manual-lines/${id}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-manual-lines'] });
     },
@@ -58,10 +36,7 @@ export function useUpdateInvoiceManualLine() {
 export function useDeleteInvoiceManualLine() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('invoice_manual_lines').delete().eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api.delete<void>(`/invoice-manual-lines/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-manual-lines'] });
     },
@@ -73,29 +48,15 @@ export function useInvoiceFees(invoiceId?: string) {
   return useQuery({
     queryKey: ['invoice-fees', invoiceId],
     enabled: !!invoiceId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('invoice_fees')
-        .select('*')
-        .eq('invoice_id', invoiceId!);
-      if (error) throw error;
-      return data as InvoiceFee[];
-    },
+    queryFn: () => api.get<InvoiceFee[]>(`/invoice-fees?invoice_id=${invoiceId}`),
   });
 }
 
 export function useCreateInvoiceFee() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (fee: Omit<InvoiceFee, 'id' | 'created_at'>) => {
-      const { data, error } = await supabase
-        .from('invoice_fees')
-        .insert(fee)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as InvoiceFee;
-    },
+    mutationFn: (fee: Omit<InvoiceFee, 'id' | 'created_at'>) =>
+      api.post<InvoiceFee>('/invoice-fees', fee),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-fees'] });
     },
@@ -105,16 +66,8 @@ export function useCreateInvoiceFee() {
 export function useUpdateInvoiceFee() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<InvoiceFee> }) => {
-      const { data, error } = await supabase
-        .from('invoice_fees')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as InvoiceFee;
-    },
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<InvoiceFee> }) =>
+      api.put<InvoiceFee>(`/invoice-fees/${id}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-fees'] });
     },
@@ -124,10 +77,7 @@ export function useUpdateInvoiceFee() {
 export function useDeleteInvoiceFee() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('invoice_fees').delete().eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api.delete<void>(`/invoice-fees/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-fees'] });
     },
@@ -139,28 +89,18 @@ export function useInvoiceFeeAttachments(feeId?: string) {
   return useQuery({
     queryKey: ['invoice-fee-attachments', feeId],
     enabled: !!feeId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('invoice_fee_attachments')
-        .select('*')
-        .eq('fee_id', feeId!);
-      if (error) throw error;
-      return data as InvoiceFeeAttachment[];
-    },
+    queryFn: () => api.get<InvoiceFeeAttachment[]>(`/invoice-fee-attachments?fee_id=${feeId}`),
   });
 }
 
 export function useCreateFeeAttachment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (attachment: Omit<InvoiceFeeAttachment, 'id' | 'created_at'>) => {
-      const { data, error } = await supabase
-        .from('invoice_fee_attachments')
-        .insert(attachment)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as InvoiceFeeAttachment;
+    mutationFn: async ({ feeId, file }: { feeId: string; file: File }) => {
+      const formData = new FormData();
+      formData.append('fee_id', feeId);
+      formData.append('file', file);
+      return api.upload<InvoiceFeeAttachment>('/invoice-fee-attachments/upload', formData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-fee-attachments'] });
@@ -171,16 +111,8 @@ export function useCreateFeeAttachment() {
 export function useDeleteFeeAttachment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, fileUrl }: { id: string; fileUrl: string }) => {
-      // Delete from storage
-      const path = fileUrl.split('/invoice-attachments/')[1];
-      if (path) {
-        await supabase.storage.from('invoice-attachments').remove([path]);
-      }
-      // Delete record
-      const { error } = await supabase.from('invoice_fee_attachments').delete().eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: ({ id }: { id: string; fileUrl?: string }) =>
+      api.delete<void>(`/invoice-fee-attachments/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-fee-attachments'] });
     },
