@@ -49,8 +49,10 @@ export function useUpdateInvoice() {
   return useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Invoice> }) =>
       api.put<Invoice>(`/invoices/${id}`, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    onSuccess: (updatedInvoice) => {
+      queryClient.setQueryData<Invoice[]>(['invoices'], old =>
+        old ? old.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv) : old
+      );
     },
   });
 }

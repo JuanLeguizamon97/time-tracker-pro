@@ -28,6 +28,17 @@ export function useUpdateEmployee() {
   });
 }
 
+export function useCreateEmployee() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; email: string; hourly_rate?: number }) =>
+      api.post<Employee>('/employees', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+}
+
 export function useDeleteEmployee() {
   const queryClient = useQueryClient();
   return useMutation({

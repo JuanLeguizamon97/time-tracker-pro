@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { Plus, FileText, DollarSign, ChevronRight, Loader2, Edit, Send, CheckCircle, XCircle, Ban, RefreshCw, Calculator, Upload, Trash2, Paperclip, UserPlus, Receipt } from 'lucide-react';
 import { format } from 'date-fns';
 import { useInvoices, useCreateInvoice, useUpdateInvoice, useInvoiceLines, useCreateInvoiceLines, useUpdateInvoiceLine, useDeleteInvoiceLine, useLinkTimeEntries } from '@/hooks/useInvoices';
@@ -60,7 +60,7 @@ function FeeAttachments({ feeId, isEditable }: { feeId: string; isEditable: bool
           <Paperclip className="h-3 w-3 text-muted-foreground" />
           <a href={att.file_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate max-w-[200px]">{att.file_name}</a>
           {isEditable && (
-            <Button variant="ghost" size="sm" className="h-5 px-1 text-destructive" onClick={() => deleteAttachment.mutateAsync({ id: att.id, fileUrl: att.file_url })}>
+            <Button variant="ghost" size="sm" className="h-5 px-1 text-destructive" onClick={() => deleteAttachment.mutateAsync({ id: att.id, fileUrl: att.file_url, feeId })}>
               <Trash2 className="h-3 w-3" />
             </Button>
           )}
@@ -118,18 +118,24 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
   const [showFeeForm, setShowFeeForm] = useState(false);
   const [feeForm, setFeeForm] = useState({ label: '', quantity: 1, unit_price_usd: 0, description: '' });
 
-  const project = projects.find(p => p.id === invoice?.project_id);
-  const client = project ? clients.find(c => c.id === project.client_id) : null;
-  const isEditable = invoice?.status === 'draft' || invoice?.status === 'sent';
+  const { project, client, isEditable } = useMemo(() => {
+    const project = projects.find(p => p.id === invoice?.project_id);
+    const client = project ? clients.find(c => c.id === project.client_id) : null;
+    const isEditable = invoice?.status === 'draft' || invoice?.status === 'sent';
+    return { project, client, isEditable };
+  }, [projects, clients, invoice?.project_id, invoice?.status]);
 
   const { data: projectRoles = [] } = useProjectRoles(invoice?.project_id);
 
-  const billedSubtotal = lines.reduce((sum, l) => sum + Number(l.amount), 0);
-  const manualSubtotal = manualLines.reduce((sum, l) => sum + Number(l.line_total), 0);
-  const feesSubtotal = fees.reduce((sum, f) => sum + Number(f.fee_total), 0);
-  const grandSubtotal = billedSubtotal + manualSubtotal + feesSubtotal;
-  const discountVal = discount || Number(invoice?.discount || 0);
-  const grandTotal = grandSubtotal - discountVal;
+  const { billedSubtotal, manualSubtotal, feesSubtotal, grandSubtotal, discountVal, grandTotal } = useMemo(() => {
+    const billedSubtotal = lines.reduce((sum, l) => sum + Number(l.amount), 0);
+    const manualSubtotal = manualLines.reduce((sum, l) => sum + Number(l.line_total), 0);
+    const feesSubtotal = fees.reduce((sum, f) => sum + Number(f.fee_total), 0);
+    const grandSubtotal = billedSubtotal + manualSubtotal + feesSubtotal;
+    const discountVal = discount || Number(invoice?.discount || 0);
+    const grandTotal = grandSubtotal - discountVal;
+    return { billedSubtotal, manualSubtotal, feesSubtotal, grandSubtotal, discountVal, grandTotal };
+  }, [lines, manualLines, fees, discount, invoice?.discount]);
 
   const handleStatusChange = async (newStatus: InvoiceStatus) => {
     if (!invoice) return;
@@ -710,14 +716,19 @@ export default function Invoices() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const activeProjects = projects.filter(p => p.is_active && !p.is_internal);
-  const filteredInvoices = statusFilter === 'all' ? invoices : invoices.filter(inv => inv.status === statusFilter);
+  const activeProjects = useMemo(() => projects.filter(p => p.is_active && !p.is_internal), [projects]);
+  const filteredInvoices = useMemo(
+    () => statusFilter === 'all' ? invoices : invoices.filter(inv => inv.status === statusFilter),
+    [invoices, statusFilter]
+  );
 
-  const getProjectName = (projectId: string) => projects.find(p => p.id === projectId)?.name || 'Unknown';
-  const getClientName = (projectId: string) => {
-    const project = projects.find(p => p.id === projectId);
-    return project ? clients.find(c => c.id === project.client_id)?.name || 'No client' : 'No client';
-  };
+  const projectMap = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
+  const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
+  const getProjectName = useCallback((projectId: string) => projectMap.get(projectId)?.name || 'Unknown', [projectMap]);
+  const getClientName = useCallback((projectId: string) => {
+    const project = projectMap.get(projectId);
+    return project ? clientMap.get(project.client_id)?.name || 'No client' : 'No client';
+  }, [projectMap, clientMap]);
 
   const handleCreateInvoice = async () => {
     if (!selectedProjectId) { toast.error('Please select a project.'); return; }

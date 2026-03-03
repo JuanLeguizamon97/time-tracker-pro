@@ -16,8 +16,8 @@ export function useCreateInvoiceManualLine() {
   return useMutation({
     mutationFn: (line: Omit<InvoiceManualLine, 'id' | 'created_at'>) =>
       api.post<InvoiceManualLine>('/invoice-manual-lines', line),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['invoice-manual-lines'] });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['invoice-manual-lines', data.invoice_id] });
     },
   });
 }
@@ -57,8 +57,8 @@ export function useCreateInvoiceFee() {
   return useMutation({
     mutationFn: (fee: Omit<InvoiceFee, 'id' | 'created_at'>) =>
       api.post<InvoiceFee>('/invoice-fees', fee),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['invoice-fees'] });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['invoice-fees', data.invoice_id] });
     },
   });
 }
@@ -102,8 +102,8 @@ export function useCreateFeeAttachment() {
       formData.append('file', file);
       return api.upload<InvoiceFeeAttachment>('/invoice-fee-attachments/upload', formData);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['invoice-fee-attachments'] });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['invoice-fee-attachments', data.fee_id] });
     },
   });
 }
@@ -111,10 +111,12 @@ export function useCreateFeeAttachment() {
 export function useDeleteFeeAttachment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id }: { id: string; fileUrl?: string }) =>
+    mutationFn: ({ id }: { id: string; fileUrl?: string; feeId?: string }) =>
       api.delete<void>(`/invoice-fee-attachments/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['invoice-fee-attachments'] });
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: variables.feeId ? ['invoice-fee-attachments', variables.feeId] : ['invoice-fee-attachments'],
+      });
     },
   });
 }
