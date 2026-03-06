@@ -15,6 +15,7 @@ const Projects = lazy(() => import("./pages/Projects"));
 const Clients = lazy(() => import("./pages/Clients"));
 const Employees = lazy(() => import("./pages/Employees"));
 const Invoices = lazy(() => import("./pages/Invoices"));
+const InvoiceEdit = lazy(() => import("./pages/InvoiceEdit"));
 const Reports = lazy(() => import("./pages/Reports"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Auth = lazy(() => import("./pages/Auth"));
@@ -62,6 +63,7 @@ const App = () => (
               <Route path="/clients" element={<ProtectedRoute><MainLayout><Clients /></MainLayout></ProtectedRoute>} />
               <Route path="/employees" element={<ProtectedRoute><MainLayout><Employees /></MainLayout></ProtectedRoute>} />
               <Route path="/invoices" element={<ProtectedRoute><MainLayout><Invoices /></MainLayout></ProtectedRoute>} />
+              <Route path="/invoices/:invoiceId/edit" element={<ProtectedRoute><MainLayout><InvoiceEdit /></MainLayout></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><MainLayout><Reports /></MainLayout></ProtectedRoute>} />
               {/* Legacy routes */}
               <Route path="/historial" element={<Navigate to="/history" replace />} />

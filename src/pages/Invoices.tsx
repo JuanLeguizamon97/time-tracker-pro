@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, FileText, DollarSign, ChevronRight, Loader2, Edit, Send, CheckCircle, XCircle, Ban, RefreshCw, Calculator, Upload, Trash2, Paperclip, UserPlus, Receipt } from 'lucide-react';
 import { format } from 'date-fns';
 import { useInvoices, useCreateInvoice, useUpdateInvoice, useInvoiceLines, useCreateInvoiceLines, useUpdateInvoiceLine, useDeleteInvoiceLine, useLinkTimeEntries } from '@/hooks/useInvoices';
@@ -701,6 +702,7 @@ function InvoiceDetailDialog({ invoice, open, onOpenChange }: { invoice: Invoice
 
 // ── Main Invoices Page ──
 export default function Invoices() {
+  const navigate = useNavigate();
   const { data: invoices = [], isLoading } = useInvoices();
   const { data: projects = [] } = useProjects();
   const { data: clients = [] } = useClients();
@@ -849,7 +851,14 @@ export default function Invoices() {
                   <TableCell><Badge className={STATUS_CONFIG[invoice.status as InvoiceStatus]?.color}>{STATUS_CONFIG[invoice.status as InvoiceStatus]?.label}</Badge></TableCell>
                   <TableCell className="text-right font-semibold text-primary">${Number(invoice.total).toLocaleString()}</TableCell>
                   <TableCell className="text-right text-muted-foreground">{format(new Date(invoice.created_at), 'MMM d, yyyy')}</TableCell>
-                  <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSelectedInvoice(invoice); setIsDetailOpen(true); }}><ChevronRight className="h-4 w-4" /></Button></TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" className="gap-1.5 text-xs h-7" onClick={(e) => { e.stopPropagation(); navigate(`/invoices/${invoice.id}/edit`); }}>
+                        <Edit className="h-3.5 w-3.5" />Edit
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSelectedInvoice(invoice); setIsDetailOpen(true); }}><ChevronRight className="h-4 w-4" /></Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
