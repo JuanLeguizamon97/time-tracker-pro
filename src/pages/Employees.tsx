@@ -68,7 +68,7 @@ export default function Employees() {
   const [pendingRole, setPendingRole] = useState<AppRole>('employee');
   const [formData, setFormData] = useState({ name: '' });
 
-  const getRole = (userId: string): AppRole => roles.find(r => r.user_id === userId)?.role || 'employee';
+  const getRole = (employeeId: string): AppRole => roles.find(r => r.user_id === employeeId)?.role || 'employee';
   const adminCount = roles.filter(r => r.role === 'admin').length;
 
   const filteredEmployees = employees.filter(
@@ -111,13 +111,13 @@ export default function Employees() {
 
   const handleOpenRoleDialog = (emp: Employee) => {
     setRoleTarget(emp);
-    setPendingRole(getRole(emp.user_id));
+    setPendingRole(getRole(emp.id));
     setIsRoleDialogOpen(true);
   };
 
   const handleSaveRole = async () => {
     if (!roleTarget) return;
-    const currentRole = getRole(roleTarget.user_id);
+    const currentRole = getRole(roleTarget.id);
     if (pendingRole === currentRole) { setIsRoleDialogOpen(false); return; }
 
     // Last admin guard
@@ -140,7 +140,7 @@ export default function Employees() {
   const executeRoleChange = async () => {
     if (!roleTarget) return;
     try {
-      await updateRole.mutateAsync({ userId: roleTarget.user_id, newRole: pendingRole });
+      await updateRole.mutateAsync({ userId: roleTarget.id, newRole: pendingRole });
       toast.success('Role updated.');
       setIsRoleDialogOpen(false);
       setIsSelfDemoteAlertOpen(false);
@@ -219,7 +219,7 @@ export default function Employees() {
             </TableHeader>
             <TableBody>
               {filteredEmployees.map(emp => {
-                const role = getRole(emp.user_id);
+                const role = getRole(emp.id);
                 return (
                   <TableRow key={emp.id}>
                     <TableCell>

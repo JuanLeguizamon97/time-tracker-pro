@@ -20,7 +20,7 @@ export default function History() {
 
   const { data: projects = [] } = useProjects();
   const { data: clients = [] } = useClients();
-  const { data: monthEntries = [], isLoading } = useTimeEntriesByDateRange(monthStart, monthEnd, employee?.user_id);
+  const { data: monthEntries = [], isLoading } = useTimeEntriesByDateRange(monthStart, monthEnd, employee?.id);
 
   const sortedEntries = useMemo(() => {
     return [...monthEntries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());

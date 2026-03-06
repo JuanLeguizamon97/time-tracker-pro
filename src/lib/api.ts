@@ -2,6 +2,21 @@ import { msalInstance, loginRequest } from '@/config/msalConfig';
 
 const AUTH_MODE = import.meta.env.VITE_AUTH_MODE || 'azure';
 
+function getMockHeaders(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem('mock_user');
+    if (!raw) return {};
+    const user = JSON.parse(raw) as { email: string; name: string };
+    return {
+      'X-Dev-User-Email': user.email,
+      'X-Dev-User-Name': user.name,
+      'X-Dev-User-Oid': user.email,
+    };
+  } catch {
+    return {};
+  }
+}
+
 async function getAccessToken(): Promise<string | null> {
   if (AUTH_MODE === 'mock') return null;
 
@@ -23,6 +38,9 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (AUTH_MODE === 'mock') {
+    Object.assign(headers, getMockHeaders());
   }
 
   const response = await fetch(`/api${path}`, {

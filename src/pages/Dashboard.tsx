@@ -20,8 +20,8 @@ export default function Dashboard() {
 
   const { data: allProjects = [] } = useActiveProjects();
   const { data: clients = [] } = useClients();
-  const { data: assignedProjects = [] } = useAssignedProjectsWithDetails(employee?.user_id);
-  const { data: weekEntries = [], isLoading } = useTimeEntriesByWeek(weekStart, employee?.user_id);
+  const { data: assignedProjects = [] } = useAssignedProjectsWithDetails(employee?.id);
+  const { data: weekEntries = [], isLoading } = useTimeEntriesByWeek(weekStart, employee?.id);
   const { data: invoices = [] } = useInvoices();
 
   const stats = useMemo(() => {
@@ -64,7 +64,7 @@ export default function Dashboard() {
             Week of {format(weekStart, 'MMM d')} — {format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'MMM d, yyyy')}
           </p>
         </div>
-        <Button className="gap-2" onClick={() => navigate('/')}>
+        <Button className="gap-2" onClick={() => navigate('/timesheet')}>
           <Clock className="h-4 w-4" />Log this week
           <ArrowRight className="h-4 w-4" />
         </Button>

@@ -34,7 +34,7 @@ export default function Reports() {
 
   // Admin sees all, employee sees only their own
   const { data: allEntries = [], isLoading: allLoading } = useAllTimeEntriesByDateRange(startDate, endDate);
-  const { data: myEntries = [], isLoading: myLoading } = useTimeEntriesByDateRange(startDate, endDate, employee?.user_id);
+  const { data: myEntries = [], isLoading: myLoading } = useTimeEntriesByDateRange(startDate, endDate, employee?.id);
 
   const rawEntries = isAdmin ? allEntries : myEntries;
   const isLoading = isAdmin ? allLoading : myLoading;

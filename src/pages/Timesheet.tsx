@@ -43,9 +43,9 @@ export default function Timesheet() {
 
   const { data: allProjects = [], isLoading: projectsLoading } = useActiveProjects();
   const { data: clients = [] } = useClients();
-  const { data: assignedProjects = [], isLoading: assignmentsLoading } = useAssignedProjectsWithDetails(employee?.user_id);
-  const { data: rawAssignments = [] } = useAssignedProjects(employee?.user_id);
-  const { data: weekEntries = [], isLoading: entriesLoading } = useTimeEntriesByWeek(weekStart, employee?.user_id);
+  const { data: assignedProjects = [], isLoading: assignmentsLoading } = useAssignedProjectsWithDetails(employee?.id);
+  const { data: rawAssignments = [] } = useAssignedProjects(employee?.id);
+  const { data: weekEntries = [], isLoading: entriesLoading } = useTimeEntriesByWeek(weekStart, employee?.id);
 
   const createTimeEntry = useCreateTimeEntry();
   const updateTimeEntry = useUpdateTimeEntry();

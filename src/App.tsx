@@ -3,9 +3,10 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, ReactNode } from "react";
+import { Loader2 } from "lucide-react";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Timesheet = lazy(() => import("./pages/Timesheet"));
@@ -16,6 +17,21 @@ const Employees = lazy(() => import("./pages/Employees"));
 const Invoices = lazy(() => import("./pages/Invoices"));
 const Reports = lazy(() => import("./pages/Reports"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Auth = lazy(() => import("./pages/Auth"));
+const Register = lazy(() => import("./pages/Register"));
+
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!isAuthenticated) return <Navigate to="/auth" replace />;
+  return <>{children}</>;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,15 +53,16 @@ const App = () => (
         <BrowserRouter>
           <Suspense fallback={null}>
             <Routes>
-              <Route path="/auth" element={<Navigate to="/" replace />} />
-              <Route path="/" element={<MainLayout><Dashboard /></MainLayout>} />
-              <Route path="/timesheet" element={<MainLayout><Timesheet /></MainLayout>} />
-              <Route path="/history" element={<MainLayout><History /></MainLayout>} />
-              <Route path="/projects" element={<MainLayout><Projects /></MainLayout>} />
-              <Route path="/clients" element={<MainLayout><Clients /></MainLayout>} />
-              <Route path="/employees" element={<MainLayout><Employees /></MainLayout>} />
-              <Route path="/invoices" element={<MainLayout><Invoices /></MainLayout>} />
-              <Route path="/reports" element={<MainLayout><Reports /></MainLayout>} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/" element={<ProtectedRoute><MainLayout><Dashboard /></MainLayout></ProtectedRoute>} />
+              <Route path="/timesheet" element={<ProtectedRoute><MainLayout><Timesheet /></MainLayout></ProtectedRoute>} />
+              <Route path="/history" element={<ProtectedRoute><MainLayout><History /></MainLayout></ProtectedRoute>} />
+              <Route path="/projects" element={<ProtectedRoute><MainLayout><Projects /></MainLayout></ProtectedRoute>} />
+              <Route path="/clients" element={<ProtectedRoute><MainLayout><Clients /></MainLayout></ProtectedRoute>} />
+              <Route path="/employees" element={<ProtectedRoute><MainLayout><Employees /></MainLayout></ProtectedRoute>} />
+              <Route path="/invoices" element={<ProtectedRoute><MainLayout><Invoices /></MainLayout></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute><MainLayout><Reports /></MainLayout></ProtectedRoute>} />
               {/* Legacy routes */}
               <Route path="/historial" element={<Navigate to="/history" replace />} />
               <Route path="/proyectos" element={<Navigate to="/projects" replace />} />
