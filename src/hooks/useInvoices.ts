@@ -9,6 +9,14 @@ export function useInvoices() {
   });
 }
 
+export function useInvoice(invoiceId?: string) {
+  return useQuery({
+    queryKey: ['invoices', invoiceId],
+    enabled: !!invoiceId,
+    queryFn: () => api.get<Invoice>(`/invoices/${invoiceId}`),
+  });
+}
+
 export function useInvoicesByProject(projectId?: string) {
   return useQuery({
     queryKey: ['invoices', 'project', projectId],

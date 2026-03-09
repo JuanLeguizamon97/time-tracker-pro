@@ -256,6 +256,8 @@ export interface InvoiceLine {
   hours: number;
   rate_snapshot: number;
   amount: number;
+  discount: number;
+  discount_type: 'fixed' | 'percentage';
   created_at: string;
 }
 

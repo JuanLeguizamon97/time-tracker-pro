@@ -1,5 +1,6 @@
-import { createContext, useContext, ReactNode } from 'react';
+import { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
 import { Employee, AppRole } from '@/types';
+import { api } from '@/lib/api';
 
 interface AuthContextType {
   employee: Employee | null;
@@ -14,28 +15,52 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const mockEmployee: Employee = {
-  id: 'admin-001',
-  user_id: 'admin-001',
-  name: 'Administrador',
-  email: 'admin@timetrack.com',
-  hourly_rate: 0,
-  is_active: true,
-  supervisor_id: null,
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [role, setRole] = useState<AppRole>('employee');
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadProfile = useCallback(async () => {
+    const raw = localStorage.getItem('mock_user');
+    if (!raw) {
+      setEmployee(null);
+      setIsLoading(false);
+      return;
+    }
+    try {
+      const emp = await api.get<Employee>('/employees/me');
+      setEmployee(emp);
+      const roles = await api.get<{ id: string; user_id: string; role: AppRole }[]>('/user-roles');
+      const found = roles.find(r => r.user_id === emp.id);
+      setRole(found?.role ?? 'employee');
+    } catch {
+      setEmployee(null);
+      setRole('employee');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  const signOut = async () => {
+    localStorage.removeItem('mock_user');
+    setEmployee(null);
+    setRole('employee');
+    window.location.href = '/auth';
+  };
+
   const value: AuthContextType = {
-    employee: mockEmployee,
-    role: 'admin',
-    isLoading: false,
-    isAdmin: true,
-    isAuthenticated: true,
-    signIn: async () => {},
-    signOut: async () => {},
-    refreshProfile: async () => {},
+    employee,
+    role,
+    isLoading,
+    isAdmin: role === 'admin',
+    isAuthenticated: !!employee,
+    signIn: async () => { window.location.href = '/auth'; },
+    signOut,
+    refreshProfile: loadProfile,
   };
 
   return (
@@ -47,8 +72,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }
