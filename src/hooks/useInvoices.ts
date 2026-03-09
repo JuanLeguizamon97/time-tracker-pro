@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Invoice, InvoiceLine, InvoiceTimeEntry } from '@/types';
+import { Invoice, InvoiceLine, InvoiceTimeEntry, InvoiceEditData, InvoicePatch } from '@/types';
 
 export function useInvoices() {
   return useQuery({
@@ -106,6 +106,28 @@ export function useLinkTimeEntries() {
       api.post<InvoiceTimeEntry[]>('/invoice-time-entries/bulk', entries),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoice-time-entries'] });
+    },
+  });
+}
+
+export function useInvoiceEditData(invoiceId?: string) {
+  return useQuery({
+    queryKey: ['invoice-edit-data', invoiceId],
+    enabled: !!invoiceId,
+    queryFn: () => api.get<InvoiceEditData>(`/invoices/${invoiceId}/edit-data`),
+  });
+}
+
+export function usePatchInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: InvoicePatch }) =>
+      api.patch<Invoice>(`/invoices/${id}`, patch),
+    onSuccess: (updatedInvoice) => {
+      queryClient.setQueryData<Invoice[]>(['invoices'], old =>
+        old ? old.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv) : old
+      );
+      queryClient.invalidateQueries({ queryKey: ['invoice-edit-data', updatedInvoice.id] });
     },
   });
 }
