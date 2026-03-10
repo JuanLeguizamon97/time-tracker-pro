@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useProjects } from '@/hooks/useProjects';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -11,6 +11,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function InvoiceNewPage() {
   const navigate = useNavigate();
@@ -24,17 +32,19 @@ export default function InvoiceNewPage() {
 
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [showNoHoursDialog, setShowNoHoursDialog] = useState(false);
 
   const activeProjects = useMemo(
     () => projects.filter(p => p.is_active && !p.is_internal),
     [projects]
   );
 
-  const handleCreate = async () => {
-    if (!selectedProjectId) {
-      toast.error('Please select a project.');
-      return;
-    }
+  const selectedProject = useMemo(
+    () => activeProjects.find(p => p.id === selectedProjectId),
+    [activeProjects, selectedProjectId]
+  );
+
+  const doCreateInvoice = async () => {
     setIsCreating(true);
     try {
       const invoice = await createInvoice.mutateAsync({ project_id: selectedProjectId });
@@ -101,8 +111,75 @@ export default function InvoiceNewPage() {
     }
   };
 
+  const handleCreate = async () => {
+    if (!selectedProjectId) {
+      toast.error('Please select a project.');
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      // Step 1: Check for available time entries
+      const checkRes = await api.get<{
+        has_entries: boolean;
+        total_hours: number;
+        total_amount: number;
+        entry_count: number;
+      }>(`/invoices/check-hours?project_id=${selectedProjectId}`);
+
+      if (!checkRes.has_entries) {
+        // No entries — show dialog, do NOT create invoice
+        setIsCreating(false);
+        setShowNoHoursDialog(true);
+        return;
+      }
+
+      // Step 2: Entries exist — proceed with creation
+      await doCreateInvoice();
+    } catch (err) {
+      console.error(err);
+      toast.error('Something went wrong.');
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* No Hours Dialog */}
+      <Dialog open={showNoHoursDialog} onOpenChange={setShowNoHoursDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              No Hours Registered
+            </DialogTitle>
+            <DialogDescription className="pt-2">
+              There are no billable time entries for project{' '}
+              <span className="font-semibold text-foreground">"{selectedProject?.name}"</span>{' '}
+              in the current period.
+              <br /><br />
+              Would you like to create the invoice manually and enter the details yourself?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 sm:justify-between">
+            <Button
+              variant="outline"
+              onClick={() => setShowNoHoursDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setShowNoHoursDialog(false);
+                navigate(`/invoices/new/manual?project_id=${selectedProjectId}`);
+              }}
+            >
+              Create Manual Invoice
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Breadcrumb */}
       <Breadcrumb>
         <BreadcrumbList>

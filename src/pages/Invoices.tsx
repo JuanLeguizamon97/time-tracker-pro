@@ -1,10 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, FileText, DollarSign, ChevronRight, Loader2, CheckCircle } from 'lucide-react';
+import { Plus, FileText, DollarSign, ChevronRight, Loader2, CheckCircle, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 import { useInvoices } from '@/hooks/useInvoices';
 import { useProjects } from '@/hooks/useProjects';
 import { useClients } from '@/hooks/useClients';
+import { api } from '@/lib/api';
 import { Invoice, InvoiceStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,7 +14,6 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useState, useCallback } from 'react';
 
 const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'bg-muted text-muted-foreground' },
@@ -29,6 +30,48 @@ export default function Invoices() {
   const { data: clients = [] } = useClients();
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  type SchedulerStatus = {
+    last_run: string | null;
+    last_period: string | null;
+    invoices_generated: number;
+    next_run: string | null;
+    status?: string;
+  };
+  const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  useEffect(() => {
+    api.get<SchedulerStatus>('/invoices/scheduler-status')
+      .then(data => setSchedulerStatus(data))
+      .catch(() => {/* ignore — table may not exist yet */});
+  }, []);
+
+  const today = new Date();
+  const dayOfMonth = today.getDate();
+  const showPreBanner = dayOfMonth >= 1 && dayOfMonth <= 5;
+  const prevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const prevMonthName = prevMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+  const handleGenerateNow = async () => {
+    setIsGenerating(true);
+    try {
+      const periodEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+      const periodStart = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), 1);
+      const fmt = (d: Date) => d.toISOString().split('T')[0];
+      await api.post('/invoices/generate-monthly', {
+        period_start: fmt(periodStart),
+        period_end: fmt(periodEnd),
+      });
+      toast.success('Invoice generation triggered successfully.');
+      const status = await api.get<SchedulerStatus>('/invoices/scheduler-status');
+      setSchedulerStatus(status);
+    } catch {
+      toast.error('Failed to trigger invoice generation.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const filteredInvoices = useMemo(
     () => statusFilter === 'all' ? invoices : invoices.filter(inv => inv.status === statusFilter),
@@ -112,6 +155,35 @@ export default function Invoices() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Auto-generation banners */}
+      {showPreBanner && !schedulerStatus?.last_run && (
+        <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm dark:border-blue-800 dark:bg-blue-950">
+          <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+            <Calendar className="h-4 w-4" />
+            <span>Invoices for <strong>{prevMonthName}</strong> will be auto-generated on the 5th.</span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-blue-300 text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:text-blue-300"
+            onClick={handleGenerateNow}
+            disabled={isGenerating}
+          >
+            {isGenerating && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+            Generate Now
+          </Button>
+        </div>
+      )}
+      {schedulerStatus?.last_run && schedulerStatus.invoices_generated > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300">
+          <CheckCircle className="h-4 w-4" />
+          <span>
+            <strong>{schedulerStatus.invoices_generated}</strong> invoice{schedulerStatus.invoices_generated !== 1 ? 's' : ''} were auto-generated for{' '}
+            <strong>{schedulerStatus.last_period?.split(' / ')[0]?.substring(0, 7)}</strong>.
+          </span>
+        </div>
+      )}
 
       {/* Filter */}
       <div className="flex items-center gap-2">

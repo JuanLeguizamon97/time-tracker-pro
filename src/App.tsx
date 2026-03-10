@@ -16,6 +16,7 @@ const Employees = lazy(() => import("./pages/Employees"));
 const Invoices = lazy(() => import("./pages/Invoices"));
 const InvoiceEditPage = lazy(() => import("./pages/invoices/InvoiceEditPage"));
 const InvoiceNewPage = lazy(() => import("./pages/invoices/InvoiceNewPage"));
+const InvoiceManualPage = lazy(() => import("./pages/invoices/InvoiceManualPage"));
 const ProjectNewPage = lazy(() => import("./pages/projects/ProjectNewPage"));
 const ProjectDetailPage = lazy(() => import("./pages/projects/ProjectDetailPage"));
 const ProjectEditPage = lazy(() => import("./pages/projects/ProjectEditPage"));
@@ -54,6 +55,7 @@ const App = () => (
               <Route path="/employees" element={<MainLayout><Employees /></MainLayout>} />
               <Route path="/invoices" element={<MainLayout><Invoices /></MainLayout>} />
               <Route path="/invoices/new" element={<MainLayout><InvoiceNewPage /></MainLayout>} />
+              <Route path="/invoices/new/manual" element={<MainLayout><InvoiceManualPage /></MainLayout>} />
               <Route path="/invoices/:invoiceId/edit" element={<MainLayout><InvoiceEditPage /></MainLayout>} />
               <Route path="/reports" element={<MainLayout><Reports /></MainLayout>} />
               {/* Legacy routes */}
