@@ -19,11 +19,19 @@ export function useActiveClients() {
 export function useCreateClient() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (client: { name: string; email?: string; phone?: string; manager_name?: string; manager_email?: string; manager_phone?: string }) =>
+    mutationFn: (client: Partial<Client> & { name: string }) =>
       api.post<Client>('/clients', client),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
     },
+  });
+}
+
+export function useClient(clientId?: string) {
+  return useQuery({
+    queryKey: ['clients', clientId],
+    queryFn: () => api.get<Client>(`/clients/${clientId}`),
+    enabled: !!clientId,
   });
 }
 

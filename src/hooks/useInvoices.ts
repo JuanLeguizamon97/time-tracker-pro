@@ -44,8 +44,13 @@ export function useInvoiceTimeEntries(invoiceId?: string) {
 export function useCreateInvoice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (invoice: { project_id: string; notes?: string }) =>
-      api.post<Invoice>('/invoices', { project_id: invoice.project_id, notes: invoice.notes || null, status: 'draft' }),
+    mutationFn: (invoice: { project_id: string; notes?: string; owner_company?: string }) =>
+      api.post<Invoice>('/invoices', {
+        project_id: invoice.project_id,
+        notes: invoice.notes || null,
+        status: 'draft',
+        owner_company: invoice.owner_company || 'IPC',
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },

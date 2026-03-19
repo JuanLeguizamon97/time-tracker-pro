@@ -39,6 +39,11 @@ interface Step1Form {
   referral_type: string;
   referral_value: string;
   description: string;
+  owner_company: string;
+  billing_period: string;
+  billing_day_of_period: string;
+  custom_period_days: string;
+  billing_anchor_date: string;
 }
 
 // ── Step 2 form state
@@ -86,6 +91,11 @@ export default function ProjectNewPage() {
     referral_type: 'percentage',
     referral_value: '',
     description: '',
+    owner_company: 'IPC',
+    billing_period: 'monthly',
+    billing_day_of_period: '3',
+    custom_period_days: '',
+    billing_anchor_date: '',
   });
 
   const set = (field: keyof Step1Form, value: any) =>
@@ -169,6 +179,11 @@ export default function ProjectNewPage() {
         referral_type: form.referral_id ? form.referral_type : undefined,
         referral_value: form.referral_id && form.referral_value ? parseFloat(form.referral_value) : undefined,
         description: form.description || undefined,
+        owner_company: form.owner_company,
+        billing_period: form.billing_period,
+        billing_day_of_period: form.billing_day_of_period ? parseInt(form.billing_day_of_period) : undefined,
+        custom_period_days: form.custom_period_days ? parseInt(form.custom_period_days) : undefined,
+        billing_anchor_date: form.billing_anchor_date || undefined,
       } as any);
 
       // 2. Create roles (collect created role IDs by temp ID)
@@ -376,6 +391,93 @@ export default function ProjectNewPage() {
                 placeholder="Optional notes about this project..."
                 className="resize-none text-sm"
               />
+            </div>
+
+            <Separator />
+
+            {/* Owner Company */}
+            <div className="space-y-2">
+              <Label>Owner Company *</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => set('owner_company', 'IPC')}
+                  className={`flex-1 rounded-md border px-4 py-2 text-sm font-semibold transition-colors ${
+                    form.owner_company === 'IPC'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'border-input bg-background text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  IPC — Impact Point Co.
+                </button>
+                <button
+                  type="button"
+                  onClick={() => set('owner_company', 'PI')}
+                  className={`flex-1 rounded-md border px-4 py-2 text-sm font-semibold transition-colors ${
+                    form.owner_company === 'PI'
+                      ? 'bg-purple-600 text-white border-purple-600'
+                      : 'border-input bg-background text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  PI — Pegasus Insights
+                </button>
+              </div>
+            </div>
+
+            {/* Billing Configuration */}
+            <div className="space-y-3 border rounded-md p-3 bg-muted/20">
+              <Label className="text-sm font-semibold">Billing Configuration</Label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label>Billing Period</Label>
+                  <Select value={form.billing_period} onValueChange={v => set('billing_period', v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="bimonthly">Bi-monthly</SelectItem>
+                      <SelectItem value="quarterly">Quarterly</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {['monthly', 'bimonthly', 'quarterly'].includes(form.billing_period) && (
+                  <div className="space-y-1">
+                    <Label>Invoice Day of Period</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={form.billing_day_of_period}
+                      onChange={e => set('billing_day_of_period', e.target.value)}
+                      placeholder="e.g. 3"
+                    />
+                  </div>
+                )}
+                {form.billing_period === 'custom' && (
+                  <div className="space-y-1">
+                    <Label>Period Length (days)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={form.custom_period_days}
+                      onChange={e => set('custom_period_days', e.target.value)}
+                      placeholder="e.g. 30"
+                    />
+                  </div>
+                )}
+                {['weekly', 'biweekly', 'custom'].includes(form.billing_period) && (
+                  <div className="space-y-1">
+                    <Label>Anchor Date</Label>
+                    <Input
+                      type="date"
+                      value={form.billing_anchor_date}
+                      onChange={e => set('billing_anchor_date', e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

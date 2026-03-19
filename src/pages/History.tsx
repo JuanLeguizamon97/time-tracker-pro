@@ -7,6 +7,7 @@ import { useProjects } from '@/hooks/useProjects';
 import { useClients } from '@/hooks/useClients';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useTimeEntriesByDateRange } from '@/hooks/useTimeEntries';
+import { useAllProjectRoles } from '@/hooks/useProjectRoles';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
@@ -32,7 +33,7 @@ export default function History() {
 
   // Employee filter — only relevant for admins
   const [selectedUserId, setSelectedUserId] = useState<string>(() => {
-    return isAdmin ? 'all' : (employee?.user_id || '');
+    return isAdmin ? 'all' : (employee?.id || '');
   });
 
   // Project filter
@@ -49,10 +50,11 @@ export default function History() {
   const { data: projects = [] } = useProjects();
   const { data: clients = [] } = useClients();
   const { data: employees = [] } = useEmployees();
+  const { data: allRoles = [] } = useAllProjectRoles();
 
-  // Resolve which user_id to filter by
+  // Resolve which user_id to filter by (always employees.id — FK used in time_entries)
   const filterUserId = useMemo(() => {
-    if (!isAdmin) return employee?.user_id;
+    if (!isAdmin) return employee?.id;
     if (selectedUserId === 'all') return undefined;
     return selectedUserId;
   }, [isAdmin, employee, selectedUserId]);
@@ -93,8 +95,11 @@ export default function History() {
     setSelectedDate(prev => (direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)));
   };
 
+  const roleMap = useMemo(() => new Map(allRoles.map(r => [r.id, r.name])), [allRoles]);
+
   const getProjectName = (projectId: string) => projects.find(p => p.id === projectId)?.name || 'Unknown project';
-  const getEmployeeName = (userId: string) => employees.find(e => e.user_id === userId)?.name || userId;
+  const getEmployeeName = (userId: string) => employees.find(e => e.id === userId)?.name || 'Unknown Employee';
+  const getRoleName = (roleId: string | null) => (roleId ? roleMap.get(roleId) ?? null : null);
 
   const hasActiveFilters = selectedProjectId || (isAdmin && selectedUserId !== 'all');
 
@@ -151,7 +156,7 @@ export default function History() {
               <SelectContent>
                 <SelectItem value="all">All Employees</SelectItem>
                 {employees.filter(e => e.is_active).map(emp => (
-                  <SelectItem key={emp.user_id} value={emp.user_id}>
+                  <SelectItem key={emp.id} value={emp.id}>
                     {emp.name}
                   </SelectItem>
                 ))}
@@ -185,7 +190,7 @@ export default function History() {
             size="sm"
             className="text-muted-foreground h-9 self-end"
             onClick={() => {
-              setSelectedUserId(isAdmin ? 'all' : (employee?.user_id || ''));
+              setSelectedUserId(isAdmin ? 'all' : (employee?.id || ''));
               setSelectedProjectId('');
             }}
           >
@@ -283,8 +288,15 @@ export default function History() {
                     <TableRow key={entry.id}>
                       <TableCell>{format(new Date(entry.date), 'MMM d')}</TableCell>
                       {isAdmin && selectedUserId === 'all' && (
-                        <TableCell className="text-muted-foreground text-xs">
-                          {getEmployeeName(entry.user_id)}
+                        <TableCell>
+                          <span className="text-sm font-medium text-foreground">
+                            {getEmployeeName(entry.user_id)}
+                          </span>
+                          {getRoleName(entry.role_id) && (
+                            <p className="text-xs text-muted-foreground leading-tight">
+                              {getRoleName(entry.role_id)}
+                            </p>
+                          )}
                         </TableCell>
                       )}
                       <TableCell>{getProjectName(entry.project_id)}</TableCell>

@@ -50,7 +50,7 @@ export default function Billing() {
 
       const existingEmployee = projectBilling[entry.project_id].employeeDetails.find(e => e.name === emp.name);
       const hours = Number(entry.hours);
-      const rate = Number(emp.hourly_rate) || 0;
+      const rate = 0; // rate lives in project roles, not employees
 
       if (existingEmployee) {
         existingEmployee.hours += hours;

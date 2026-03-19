@@ -30,6 +30,7 @@ export default function Invoices() {
   const { data: clients = [] } = useClients();
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [companyFilter, setCompanyFilter] = useState<string>('all');
 
   type SchedulerStatus = {
     last_run: string | null;
@@ -49,7 +50,7 @@ export default function Invoices() {
 
   const today = new Date();
   const dayOfMonth = today.getDate();
-  const showPreBanner = dayOfMonth >= 1 && dayOfMonth <= 5;
+  const showPreBanner = dayOfMonth >= 1 && dayOfMonth <= 3;
   const prevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const prevMonthName = prevMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
 
@@ -73,13 +74,19 @@ export default function Invoices() {
     }
   };
 
-  const filteredInvoices = useMemo(
-    () => statusFilter === 'all' ? invoices : invoices.filter(inv => inv.status === statusFilter),
-    [invoices, statusFilter]
-  );
-
   const projectMap = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
   const clientMap = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients]);
+
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter(inv => {
+      if (statusFilter !== 'all' && inv.status !== statusFilter) return false;
+      if (companyFilter !== 'all') {
+        const company = inv.owner_company || 'IPC';
+        if (company !== companyFilter) return false;
+      }
+      return true;
+    });
+  }, [invoices, statusFilter, companyFilter, projectMap]);
 
   const getProjectName = useCallback(
     (projectId: string) => projectMap.get(projectId)?.name || 'Unknown',
@@ -91,11 +98,14 @@ export default function Invoices() {
   }, [projectMap, clientMap]);
 
   const stats = useMemo(() => {
-    const draft = invoices.filter(i => i.status === 'draft').length;
-    const unpaid = invoices.filter(i => i.status === 'sent').reduce((sum, i) => sum + Number(i.total), 0);
-    const paid = invoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + Number(i.total), 0);
+    const base = companyFilter === 'all' ? invoices : invoices.filter(inv =>
+      (inv.owner_company || 'IPC') === companyFilter
+    );
+    const draft = base.filter(i => i.status === 'draft').length;
+    const unpaid = base.filter(i => i.status === 'sent').reduce((sum, i) => sum + Number(i.total), 0);
+    const paid = base.filter(i => i.status === 'paid').reduce((sum, i) => sum + Number(i.total), 0);
     return { draft, unpaid, paid };
-  }, [invoices]);
+  }, [invoices, companyFilter, projectMap]);
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -161,7 +171,7 @@ export default function Invoices() {
         <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm dark:border-blue-800 dark:bg-blue-950">
           <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
             <Calendar className="h-4 w-4" />
-            <span>Invoices for <strong>{prevMonthName}</strong> will be auto-generated on the 5th.</span>
+            <span>Invoices for <strong>{prevMonthName}</strong> will be auto-generated on the 3rd.</span>
           </div>
           <Button
             size="sm"
@@ -185,20 +195,33 @@ export default function Invoices() {
         </div>
       )}
 
-      {/* Filter */}
-      <div className="flex items-center gap-2">
-        <Label className="text-sm text-muted-foreground">Status:</Label>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="sent">Sent</SelectItem>
-            <SelectItem value="paid">Paid</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-            <SelectItem value="voided">Voided</SelectItem>
-          </SelectContent>
-        </Select>
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <Label className="text-sm text-muted-foreground">Status:</Label>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="voided">Voided</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-sm text-muted-foreground">Company:</Label>
+          <Select value={companyFilter} onValueChange={setCompanyFilter}>
+            <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="IPC">IPC</SelectItem>
+              <SelectItem value="PI">PI</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Invoice Table */}
@@ -210,6 +233,7 @@ export default function Invoices() {
                 <TableHead className="table-header">Invoice</TableHead>
                 <TableHead className="table-header">Project</TableHead>
                 <TableHead className="table-header">Client</TableHead>
+                <TableHead className="table-header">Co.</TableHead>
                 <TableHead className="table-header">Status</TableHead>
                 <TableHead className="table-header text-right">Total</TableHead>
                 <TableHead className="table-header text-right">Date</TableHead>
@@ -217,17 +241,30 @@ export default function Invoices() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredInvoices.map(invoice => (
+              {filteredInvoices.map(invoice => {
+                const company = invoice.owner_company || 'IPC';
+                return (
                 <TableRow
                   key={invoice.id}
                   className="cursor-pointer hover:bg-muted/30 transition-colors duration-150"
-                  onClick={() => navigate(`/invoices/${invoice.id}/edit`)}
+                  onClick={() => navigate(`/invoices/${invoice.id}`)}
                 >
                   <TableCell className="font-medium">
                     {invoice.invoice_number ? `#${invoice.invoice_number}` : `#${invoice.id.slice(0, 8)}`}
                   </TableCell>
                   <TableCell>{getProjectName(invoice.project_id)}</TableCell>
                   <TableCell className="text-muted-foreground">{getClientName(invoice.project_id)}</TableCell>
+                  <TableCell>
+                    {company === 'IPC' ? (
+                      <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 text-xs font-semibold">
+                        IPC
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 px-2 py-0.5 text-xs font-semibold">
+                        PI
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge className={STATUS_CONFIG[invoice.status as InvoiceStatus]?.color}>
                       {STATUS_CONFIG[invoice.status as InvoiceStatus]?.label}
@@ -243,13 +280,14 @@ export default function Invoices() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={(e) => { e.stopPropagation(); navigate(`/invoices/${invoice.id}/edit`); }}
+                      onClick={(e) => { e.stopPropagation(); navigate(`/invoices/${invoice.id}`); }}
                     >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
           {filteredInvoices.length === 0 && (

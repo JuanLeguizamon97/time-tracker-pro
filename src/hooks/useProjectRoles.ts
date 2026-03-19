@@ -10,6 +10,13 @@ export function useProjectRoles(projectId?: string) {
   });
 }
 
+export function useAllProjectRoles() {
+  return useQuery({
+    queryKey: ['project-roles', 'all'],
+    queryFn: () => api.get<ProjectRole[]>('/project-roles'),
+  });
+}
+
 export function useCreateProjectRole() {
   const queryClient = useQueryClient();
   return useMutation({

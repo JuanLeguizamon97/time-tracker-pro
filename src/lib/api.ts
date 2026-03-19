@@ -30,6 +30,23 @@ async function getAccessToken(): Promise<string | null> {
   return response.accessToken;
 }
 
+async function apiFetchBlob(path: string): Promise<Blob> {
+  const token = await getAccessToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (AUTH_MODE === 'mock') {
+    Object.assign(headers, getMockHeaders());
+  }
+  const response = await fetch(`/api${path}`, { headers });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => response.statusText);
+    throw new Error(`API error ${response.status}: ${detail}`);
+  }
+  return response.blob();
+}
+
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = await getAccessToken();
   const headers: Record<string, string> = {
@@ -85,4 +102,15 @@ export const api = {
     apiFetch<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: <T>(path: string) => apiFetch<T>(path, { method: 'DELETE' }),
   upload: <T>(path: string, formData: FormData) => apiUpload<T>(path, formData),
+  download: (path: string, filename: string) =>
+    apiFetchBlob(path).then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }),
 };

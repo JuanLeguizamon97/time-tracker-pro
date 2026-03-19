@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { UserCircle, Search, MoreHorizontal, Edit, Shield, Loader2, FolderKanban, UserPlus } from 'lucide-react';
-import { useEmployees, useUpdateEmployee, useCreateEmployee } from '@/hooks/useEmployees';
+import { useNavigate } from 'react-router-dom';
+import { UserCircle, Search, MoreHorizontal, Edit, Shield, Loader2, FolderKanban, UserPlus, Eye } from 'lucide-react';
+import { useEmployees } from '@/hooks/useEmployees';
 import { useAssignedProjects } from '@/hooks/useAssignedProjects';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppRole, Employee } from '@/types';
@@ -23,7 +24,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { EmployeeProjectsDialog } from '@/components/EmployeeProjectsDialog';
 import { api } from '@/lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -46,27 +46,18 @@ function useUpdateRole() {
 }
 
 export default function Employees() {
-  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { data: employees = [], isLoading } = useEmployees();
   const { data: allAssignments = [] } = useAssignedProjects();
   const { data: roles = [] } = useEmployeeRoles();
   const { employee: currentUser } = useAuth();
-  const updateEmployee = useUpdateEmployee();
   const updateRole = useUpdateRole();
-  const createEmployee = useCreateEmployee();
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [isNewDialogOpen, setIsNewDialogOpen] = useState(false);
-  const [newFormData, setNewFormData] = useState({ name: '', email: '', hourly_rate: '', role: 'employee' as AppRole });
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isProjectsDialogOpen, setIsProjectsDialogOpen] = useState(false);
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [isSelfDemoteAlertOpen, setIsSelfDemoteAlertOpen] = useState(false);
-  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [roleTarget, setRoleTarget] = useState<Employee | null>(null);
   const [pendingRole, setPendingRole] = useState<AppRole>('employee');
-  const [formData, setFormData] = useState({ name: '' });
 
   const getRole = (employeeId: string): AppRole => roles.find(r => r.user_id === employeeId)?.role || 'employee';
   const adminCount = roles.filter(r => r.role === 'admin').length;
@@ -75,39 +66,7 @@ export default function Employees() {
     emp => emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || emp.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const getAssignedProjectsCount = (userId: string): number => allAssignments.filter(a => a.user_id === userId).length;
-
-  const handleCreateSubmit = async () => {
-    if (!newFormData.name.trim() || !newFormData.email.trim()) {
-      toast.error('Name and email are required.');
-      return;
-    }
-    try {
-      const payload: { name: string; email: string; hourly_rate?: number } = {
-        name: newFormData.name.trim(),
-        email: newFormData.email.trim(),
-      };
-      if (newFormData.hourly_rate) payload.hourly_rate = parseFloat(newFormData.hourly_rate);
-      const created = await createEmployee.mutateAsync(payload);
-      if (newFormData.role === 'admin') {
-        await api.post('/user-roles', { user_id: created.id, role: 'admin' });
-        queryClient.invalidateQueries({ queryKey: ['user-roles'] });
-      }
-      toast.success(`${created.name} added successfully.`);
-      setIsNewDialogOpen(false);
-      setNewFormData({ name: '', email: '', hourly_rate: '', role: 'employee' });
-    } catch {
-      toast.error('Something went wrong. Please try again.');
-    }
-  };
-
-  const handleEdit = (emp: Employee) => {
-    setFormData({ name: emp.name });
-    setEditingEmployeeId(emp.id);
-    setIsDialogOpen(true);
-  };
-
-  const handleOpenProjects = (emp: Employee) => { setSelectedEmployee(emp); setIsProjectsDialogOpen(true); };
+  const getAssignedProjectsCount = (employeeId: string): number => allAssignments.filter(a => a.user_id === employeeId).length;
 
   const handleOpenRoleDialog = (emp: Employee) => {
     setRoleTarget(emp);
@@ -120,13 +79,11 @@ export default function Employees() {
     const currentRole = getRole(roleTarget.id);
     if (pendingRole === currentRole) { setIsRoleDialogOpen(false); return; }
 
-    // Last admin guard
     if (currentRole === 'admin' && pendingRole === 'employee' && adminCount <= 1) {
       toast.error("You can't remove the last admin.");
       return;
     }
 
-    // Self-demotion warning
     const isSelf = currentUser?.user_id === roleTarget.user_id;
     if (isSelf && currentRole === 'admin' && pendingRole === 'employee') {
       setIsRoleDialogOpen(false);
@@ -148,16 +105,6 @@ export default function Employees() {
     } catch {
       toast.error('Something went wrong. Please try again.');
     }
-  };
-
-  const handleSubmit = async () => {
-    if (!formData.name) { toast.error('Please fill in all fields correctly.'); return; }
-    try {
-      await updateEmployee.mutateAsync({ id: editingEmployeeId!, updates: { name: formData.name } });
-      toast.success("Saved — you're all set.");
-      setIsDialogOpen(false);
-      setEditingEmployeeId(null);
-    } catch { toast.error('Something went wrong. Please try again.'); }
   };
 
   if (isLoading) {
@@ -200,13 +147,12 @@ export default function Employees() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input placeholder="Search employees..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
             </div>
-            <Button size="sm" onClick={() => setIsNewDialogOpen(true)}>
+            <Button size="sm" onClick={() => navigate('/employees/new')}>
               <UserPlus className="h-4 w-4 mr-2" />New Employee
             </Button>
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-muted-foreground mb-4">Rates are set per project role. Employee rates are derived from assignments.</p>
           <Table>
             <TableHeader>
               <TableRow>
@@ -221,11 +167,18 @@ export default function Employees() {
               {filteredEmployees.map(emp => {
                 const role = getRole(emp.id);
                 return (
-                  <TableRow key={emp.id}>
+                  <TableRow
+                    key={emp.id}
+                    className="cursor-pointer"
+                    onClick={() => navigate(`/employees/${emp.id}`)}
+                  >
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10"><UserCircle className="h-5 w-5 text-primary" /></div>
-                        <span className="font-medium">{emp.name}</span>
+                        <div>
+                          <span className="font-medium">{emp.name}</span>
+                          {emp.title && <p className="text-xs text-muted-foreground">{emp.title}</p>}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{emp.email}</TableCell>
@@ -235,15 +188,21 @@ export default function Employees() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="gap-1"><FolderKanban className="h-3 w-3" />{getAssignedProjectsCount(emp.user_id)}</Badge>
+                      <Badge variant="secondary" className="gap-1"><FolderKanban className="h-3 w-3" />{getAssignedProjectsCount(emp.id)}</Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEdit(emp)}><Edit className="h-4 w-4 mr-2" />Edit</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleOpenRoleDialog(emp)}><Shield className="h-4 w-4 mr-2" />Change Role</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleOpenProjects(emp)}><FolderKanban className="h-4 w-4 mr-2" />Assign Projects</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/employees/${emp.id}`)}>
+                            <Eye className="h-4 w-4 mr-2" />View Profile
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/employees/${emp.id}/edit`)}>
+                            <Edit className="h-4 w-4 mr-2" />Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenRoleDialog(emp)}>
+                            <Shield className="h-4 w-4 mr-2" />Change Role
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -259,26 +218,6 @@ export default function Employees() {
         </CardContent>
       </Card>
 
-      {/* Edit Employee Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Employee</DialogTitle>
-            <DialogDescription>Update employee details.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Name</Label>
-              <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmit}>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Change Role Dialog */}
       <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
         <DialogContent className="sm:max-w-md">
@@ -290,9 +229,7 @@ export default function Employees() {
             <div className="grid gap-2">
               <Label>Role</Label>
               <Select value={pendingRole} onValueChange={(v) => setPendingRole(v as AppRole)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
                   <SelectItem value="employee">Employee</SelectItem>
@@ -322,49 +259,6 @@ export default function Employees() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <EmployeeProjectsDialog open={isProjectsDialogOpen} onOpenChange={setIsProjectsDialogOpen} employee={selectedEmployee} />
-
-      {/* New Employee Dialog */}
-      <Dialog open={isNewDialogOpen} onOpenChange={setIsNewDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New Employee</DialogTitle>
-            <DialogDescription>Add a new team member to the system.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="new-name">Name <span className="text-destructive">*</span></Label>
-              <Input id="new-name" placeholder="Full name" value={newFormData.name} onChange={(e) => setNewFormData({ ...newFormData, name: e.target.value })} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="new-email">Email <span className="text-destructive">*</span></Label>
-              <Input id="new-email" type="email" placeholder="email@company.com" value={newFormData.email} onChange={(e) => setNewFormData({ ...newFormData, email: e.target.value })} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="new-rate">Hourly Rate (USD)</Label>
-              <Input id="new-rate" type="number" min="0" step="0.01" placeholder="0.00" value={newFormData.hourly_rate} onChange={(e) => setNewFormData({ ...newFormData, hourly_rate: e.target.value })} />
-            </div>
-            <div className="grid gap-2">
-              <Label>App Role</Label>
-              <Select value={newFormData.role} onValueChange={(v) => setNewFormData({ ...newFormData, role: v as AppRole })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="employee">Employee</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsNewDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateSubmit} disabled={createEmployee.isPending}>
-              {createEmployee.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
-              Add Employee
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

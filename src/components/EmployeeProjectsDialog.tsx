@@ -34,7 +34,7 @@ export function EmployeeProjectsDialog({ open, onOpenChange, employee }: Employe
   useEffect(() => {
     if (employee) {
       const assigned = assignments
-        .filter(a => a.user_id === employee.user_id)
+        .filter(a => a.user_id === employee.id)
         .map(a => a.project_id);
       setSelectedProjects(assigned);
     }
@@ -59,7 +59,7 @@ export function EmployeeProjectsDialog({ open, onOpenChange, employee }: Employe
       }));
 
       await bulkAssign.mutateAsync({
-        userId: employee.user_id,
+        userId: employee.id,
         assignments: assignmentItems,
       });
       toast.success("Saved — you're all set.");

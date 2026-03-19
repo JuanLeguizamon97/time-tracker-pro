@@ -4,6 +4,7 @@ import { AppSidebar } from './AppSidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { UserCircle, LogOut } from 'lucide-react';
+import { NotificationBell } from '@/components/NotificationBell';
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -20,6 +21,7 @@ export function MainLayout({ children }: MainLayoutProps) {
           <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background/95 backdrop-blur px-6">
             <SidebarTrigger className="lg:hidden" />
             <div className="ml-auto flex items-center gap-3">
+              <NotificationBell />
               <UserCircle className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">{employee?.name}</span>
               <Button variant="ghost" size="sm" onClick={signOut} className="gap-1.5">

@@ -31,7 +31,7 @@ export function useUpdateEmployee() {
 export function useCreateEmployee() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { name: string; email: string; hourly_rate?: number }) =>
+    mutationFn: (data: { name: string; email: string }) =>
       api.post<Employee>('/employees', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });

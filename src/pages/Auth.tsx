@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Clock, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { Employee } from '@/types';
+import type { Employee } from '@/types';
 
 const MOCK_PASSWORD = 'Impact2026';
 
@@ -38,16 +38,15 @@ export default function Auth() {
     }
     setSubmitting(true);
     try {
-      const employees = await api.get<Employee[]>('/employees');
-      const found = employees.find(emp => emp.email.toLowerCase() === email.toLowerCase());
-      if (!found) {
-        toast.error('No account found with that email. Please register first.');
-        return;
-      }
-      localStorage.setItem('mock_user', JSON.stringify({ email: found.email, name: found.name }));
+      // Set a temporary mock_user so /employees/me can identify who is calling
+      localStorage.setItem('mock_user', JSON.stringify({ email: email.trim().toLowerCase(), name: '' }));
+      const emp = await api.get<Employee>('/employees/me');
+      // Update with real name from DB
+      localStorage.setItem('mock_user', JSON.stringify({ email: emp.email, name: emp.name }));
       await refreshProfile();
     } catch {
-      toast.error('Something went wrong. Please try again.');
+      localStorage.removeItem('mock_user');
+      toast.error('No account found with that email. Please try again.');
     } finally {
       setSubmitting(false);
     }

@@ -1,15 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Edit, Plus, Trash2, Loader2, Tag, Users, LayoutDashboard } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Trash2, Loader2, Tag, Users, LayoutDashboard, X, RefreshCw, Filter } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   useProject, useProjectAssignments,
 } from '@/hooks/useProjects';
 import { useProjectRoles, useCreateProjectRole, useUpdateProjectRole, useDeleteProjectRole } from '@/hooks/useProjectRoles';
-import { useEmployees } from '@/hooks/useEmployees';
-import { useQueryClient } from '@tanstack/react-query';
+import { useSkillCatalog } from '@/hooks/useSkills';
 import { api } from '@/lib/api';
-import { ProjectRole } from '@/types';
+import { ProjectRole, AssignableEmployee, ProjectRequiredSkill, SkillCoverage } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,25 @@ const STATUS_COLORS: Record<string, string> = {
   completed: 'outline',
 };
 
+const SKILL_CATEGORIES = ['Frontend', 'Backend', 'Cloud', 'DevOps', 'Design', 'Data', 'Management', 'Soft Skills', 'Other'];
+const MIN_LEVEL_OPTIONS = [
+  { value: 'beginner', label: 'Beginner+' },
+  { value: 'intermediate', label: 'Intermediate+' },
+  { value: 'advanced', label: 'Advanced+' },
+  { value: 'expert', label: 'Expert only' },
+];
+const LEVEL_LABELS: Record<number, string> = { 1: 'Beginner', 2: 'Intermediate', 3: 'Advanced', 4: 'Expert' };
+
+function ProficiencyStars({ level }: { level: number }) {
+  return (
+    <span className="inline-flex gap-0.5">
+      {[1, 2, 3, 4].map(i => (
+        <span key={i} className={i <= level ? 'text-amber-400' : 'text-muted-foreground/30'}>★</span>
+      ))}
+    </span>
+  );
+}
+
 export default function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
@@ -42,7 +61,6 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Breadcrumb */}
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem>
@@ -53,7 +71,6 @@ export default function ProjectDetailPage() {
         </BreadcrumbList>
       </Breadcrumb>
 
-      {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate('/projects')} className="gap-2 shrink-0">
@@ -73,15 +90,9 @@ export default function ProjectDetailPage() {
               {project.manager_name && (
                 <span><span className="font-medium text-foreground">Manager:</span> {project.manager_name}</span>
               )}
-              {project.area_category && (
-                <span className="bg-muted rounded px-1.5 py-0.5 text-xs">{project.area_category}</span>
-              )}
-              {project.business_unit && (
-                <span className="bg-muted rounded px-1.5 py-0.5 text-xs">{project.business_unit}</span>
-              )}
-              {project.start_date && (
-                <span>From {project.start_date}{project.end_date ? ` → ${project.end_date}` : ''}</span>
-              )}
+              {project.area_category && <span className="bg-muted rounded px-1.5 py-0.5 text-xs">{project.area_category}</span>}
+              {project.business_unit && <span className="bg-muted rounded px-1.5 py-0.5 text-xs">{project.business_unit}</span>}
+              {project.start_date && <span>From {project.start_date}{project.end_date ? ` → ${project.end_date}` : ''}</span>}
             </div>
           </div>
         </div>
@@ -90,21 +101,13 @@ export default function ProjectDetailPage() {
         </Button>
       </div>
 
-      {/* Tabs */}
       <Tabs defaultValue="overview" className="w-full">
         <TabsList>
-          <TabsTrigger value="overview" className="gap-1.5">
-            <LayoutDashboard className="h-4 w-4" /> Overview
-          </TabsTrigger>
-          <TabsTrigger value="roles" className="gap-1.5">
-            <Tag className="h-4 w-4" /> Roles & Rates
-          </TabsTrigger>
-          <TabsTrigger value="assignments" className="gap-1.5">
-            <Users className="h-4 w-4" /> Assignments
-          </TabsTrigger>
+          <TabsTrigger value="overview" className="gap-1.5"><LayoutDashboard className="h-4 w-4" /> Overview</TabsTrigger>
+          <TabsTrigger value="roles" className="gap-1.5"><Tag className="h-4 w-4" /> Roles & Rates</TabsTrigger>
+          <TabsTrigger value="assignments" className="gap-1.5"><Users className="h-4 w-4" /> Assignments</TabsTrigger>
         </TabsList>
 
-        {/* ── Overview tab ── */}
         <TabsContent value="overview" className="mt-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Card>
@@ -125,55 +128,34 @@ export default function ProjectDetailPage() {
                 <InfoRow label="Internal" value={project.is_internal ? 'Yes' : 'No'} />
               </CardContent>
             </Card>
-
-            {/* Referral info */}
             {project.referral_id && (
               <Card>
                 <CardHeader><CardTitle className="text-sm">Referral</CardTitle></CardHeader>
                 <CardContent className="space-y-3 text-sm">
                   <InfoRow label="Type" value={project.referral_type ?? '—'} />
-                  <InfoRow
-                    label="Value"
-                    value={
-                      project.referral_value != null
-                        ? project.referral_type === 'percentage'
-                          ? `${project.referral_value}%`
-                          : `$${Number(project.referral_value).toFixed(2)}`
-                        : '—'
-                    }
-                  />
+                  <InfoRow label="Value" value={
+                    project.referral_value != null
+                      ? project.referral_type === 'percentage' ? `${project.referral_value}%` : `$${Number(project.referral_value).toFixed(2)}`
+                      : '—'
+                  } />
                 </CardContent>
               </Card>
             )}
-
-            {/* Notes */}
             {project.description && (
               <Card className="sm:col-span-2">
                 <CardHeader><CardTitle className="text-sm">Notes</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{project.description}</p>
-                </CardContent>
+                <CardContent><p className="text-sm text-muted-foreground whitespace-pre-wrap">{project.description}</p></CardContent>
               </Card>
             )}
           </div>
         </TabsContent>
 
-        {/* ── Roles & Rates tab ── */}
         <TabsContent value="roles" className="mt-4">
-          <Card>
-            <CardContent className="pt-6">
-              <ProjectRolesPanel projectId={project.id} />
-            </CardContent>
-          </Card>
+          <Card><CardContent className="pt-6"><ProjectRolesPanel projectId={project.id} /></CardContent></Card>
         </TabsContent>
 
-        {/* ── Assignments tab ── */}
         <TabsContent value="assignments" className="mt-4">
-          <Card>
-            <CardContent className="pt-6">
-              <ProjectAssignmentsPanel projectId={project.id} />
-            </CardContent>
-          </Card>
+          <Card><CardContent className="pt-6"><ProjectAssignmentsPanel projectId={project.id} /></CardContent></Card>
         </TabsContent>
       </Tabs>
     </div>
@@ -236,9 +218,8 @@ function ProjectRolesPanel({ projectId }: { projectId: string }) {
           <Plus className="h-4 w-4" /> Add Role
         </Button>
       </div>
-
       {roles.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">No roles defined. Add one to set billing rates.</p>
+        <p className="text-sm text-muted-foreground py-6 text-center">No roles defined.</p>
       ) : (
         <Table>
           <TableHeader>
@@ -268,7 +249,6 @@ function ProjectRolesPanel({ projectId }: { projectId: string }) {
           </TableBody>
         </Table>
       )}
-
       <Dialog open={isAddOpen || !!editingRole} onOpenChange={v => { if (!v) { setIsAddOpen(false); setEditingRole(null); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editingRole ? 'Edit Role' : 'Add Role'}</DialogTitle></DialogHeader>
@@ -292,28 +272,253 @@ function ProjectRolesPanel({ projectId }: { projectId: string }) {
   );
 }
 
-// ── Assignments Panel ────────────────────────────────────────────────────────
+// ── Skill Gap Section ─────────────────────────────────────────────────────────
+function SkillGapSection({ projectId, onManageSkills }: { projectId: string; onManageSkills: () => void }) {
+  const { data: coverage = [] } = useQuery<SkillCoverage[]>({
+    queryKey: ['skill-coverage', projectId],
+    queryFn: () => api.get<SkillCoverage[]>(`/projects/${projectId}/skill-coverage`),
+  });
+
+  if (coverage.length === 0) return null;
+
+  const statusIcon = (s: string) => s === 'covered' ? '✅' : s === 'partial' ? '⚠️' : '❌';
+  const statusText = (s: string) => s === 'covered' ? 'text-emerald-700 dark:text-emerald-400' : s === 'partial' ? 'text-amber-700 dark:text-amber-400' : 'text-destructive';
+
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">Required Skills for this project</p>
+        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={onManageSkills}>
+          <Plus className="h-3 w-3" /> Manage
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {coverage.map(item => (
+          <div key={item.skill_id} className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border bg-background ${statusText(item.coverage_status)}`}
+            title={item.covered_by_names.length > 0 ? `Covered by: ${item.covered_by_names.join(', ')}` : `Missing — need ${item.min_level_label}+`}>
+            {statusIcon(item.coverage_status)} {item.skill_name}
+            <span className="text-muted-foreground">({item.min_level_label}+)</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Manage Required Skills Dialog ─────────────────────────────────────────────
+function ManageRequiredSkillsDialog({
+  projectId, open, onClose,
+}: { projectId: string; open: boolean; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const { data: required = [] } = useQuery<ProjectRequiredSkill[]>({
+    queryKey: ['required-skills', projectId],
+    queryFn: () => api.get<ProjectRequiredSkill[]>(`/projects/${projectId}/required-skills`),
+    enabled: open,
+  });
+
+  const [skillSearch, setSkillSearch] = useState('');
+  const { data: catalog = [] } = useSkillCatalog(skillSearch || undefined);
+  const [selectedCatalogSkill, setSelectedCatalogSkill] = useState<{ id: string; name: string } | null>(null);
+  const [minLevel, setMinLevel] = useState(2);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const requiredIds = new Set(required.map(r => r.skill_id));
+  const filteredCatalog = catalog.filter(s => !requiredIds.has(s.id));
+
+  const handleAdd = async () => {
+    if (!selectedCatalogSkill) return;
+    setSaving(true);
+    try {
+      await api.post(`/projects/${projectId}/required-skills`, { skill_id: selectedCatalogSkill.id, min_level: minLevel });
+      queryClient.invalidateQueries({ queryKey: ['required-skills', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['skill-coverage', projectId] });
+      setSelectedCatalogSkill(null);
+      setSkillSearch('');
+      toast.success(`Added ${selectedCatalogSkill.name} as required skill.`);
+    } catch { toast.error('Something went wrong.'); }
+    finally { setSaving(false); }
+  };
+
+  const handleRemove = async (skillId: string, name: string) => {
+    try {
+      await api.delete(`/projects/${projectId}/required-skills/${skillId}`);
+      queryClient.invalidateQueries({ queryKey: ['required-skills', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['skill-coverage', projectId] });
+      toast.success(`Removed ${name}.`);
+    } catch { toast.error('Something went wrong.'); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Required Skills</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-2">
+          {/* Add skill */}
+          <div className="space-y-2">
+            <Label className="text-xs">Add required skill</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  value={selectedCatalogSkill ? selectedCatalogSkill.name : skillSearch}
+                  onChange={e => { setSkillSearch(e.target.value); setSelectedCatalogSkill(null); setCatalogOpen(true); }}
+                  onFocus={() => setCatalogOpen(true)}
+                  placeholder="Search skill catalog..."
+                  className="h-8 text-sm"
+                />
+                {catalogOpen && !selectedCatalogSkill && filteredCatalog.length > 0 && (
+                  <div className="absolute z-50 mt-1 w-full rounded border bg-popover shadow-md max-h-40 overflow-y-auto">
+                    {filteredCatalog.slice(0, 8).map(s => (
+                      <button key={s.id} type="button"
+                        className="flex w-full items-center justify-between px-3 py-1.5 text-sm hover:bg-accent text-left"
+                        onClick={() => { setSelectedCatalogSkill({ id: s.id, name: s.name }); setSkillSearch(''); setCatalogOpen(false); }}>
+                        <span>{s.name}</span>
+                        <span className="text-xs text-muted-foreground">{s.category}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Select value={String(minLevel)} onValueChange={v => setMinLevel(Number(v))}>
+                <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Beginner+</SelectItem>
+                  <SelectItem value="2">Intermediate+</SelectItem>
+                  <SelectItem value="3">Advanced+</SelectItem>
+                  <SelectItem value="4">Expert only</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button size="sm" className="h-8" onClick={handleAdd} disabled={!selectedCatalogSkill || saving}>
+                {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+              </Button>
+            </div>
+          </div>
+
+          {/* Current list */}
+          {required.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">No required skills defined yet.</p>
+          ) : (
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {required.map(r => (
+                <div key={r.id} className="flex items-center justify-between rounded border px-3 py-2 bg-muted/30">
+                  <div>
+                    <span className="text-sm font-medium">{r.skill_name}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">{r.skill_category}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">{r.min_level_label}+</Badge>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleRemove(r.skill_id, r.skill_name)}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Assignments Panel ─────────────────────────────────────────────────────────
 function ProjectAssignmentsPanel({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
   const { data: assignments = [], isLoading } = useProjectAssignments(projectId);
   const { data: roles = [] } = useProjectRoles(projectId);
-  const { data: employees = [] } = useEmployees();
 
+  // ── Skill filter state ──
+  type SkillChip = { id: string; name: string };
+  const [selectedSkills, setSelectedSkills] = useState<SkillChip[]>([]);
+  const [skillSearchInput, setSkillSearchInput] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [minLevel, setMinLevel] = useState('');
+  const [matchMode, setMatchMode] = useState<'all' | 'any'>('all');
+  const [skillDropdownOpen, setSkillDropdownOpen] = useState(false);
+  const skillDropdownRef = useRef<HTMLDivElement>(null);
+
+  // ── Employee name search ──
   const [employeeSearch, setEmployeeSearch] = useState('');
+  const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
+  const empDropdownRef = useRef<HTMLDivElement>(null);
+
+  // ── Manage skills dialog ──
+  const [manageOpen, setManageOpen] = useState(false);
+
+  // Skill catalog for filter dropdown
+  const { data: skillCatalog = [] } = useSkillCatalog(skillSearchInput || undefined);
+  const filteredCatalog = useMemo(() =>
+    skillCatalog
+      .filter(s => !categoryFilter || s.category === categoryFilter)
+      .filter(s => !selectedSkills.find(sel => sel.id === s.id))
+  , [skillCatalog, categoryFilter, selectedSkills]);
+
+  const hasActiveFilters = selectedSkills.length > 0 || !!employeeSearch || !!categoryFilter || !!minLevel;
+
+  const assignableParams = useMemo(() => {
+    const p = new URLSearchParams();
+    if (employeeSearch) p.set('name', employeeSearch);
+    selectedSkills.forEach(s => p.append('skills', s.id));
+    if (selectedSkills.length > 0) p.set('skill_match', matchMode);
+    if (minLevel) p.set('min_level', minLevel);
+    if (categoryFilter) p.set('category', categoryFilter);
+    return p.toString();
+  }, [employeeSearch, selectedSkills, matchMode, minLevel, categoryFilter]);
+
+  const { data: assignableEmployees = [], isFetching: fetchingAssignable } = useQuery<AssignableEmployee[]>({
+    queryKey: ['assignable-employees', projectId, assignableParams],
+    queryFn: () => api.get<AssignableEmployee[]>(`/projects/${projectId}/assignable-employees?${assignableParams}`),
+    enabled: hasActiveFilters,
+  });
+
+  // Check required skills
+  const { data: requiredSkills = [] } = useQuery<ProjectRequiredSkill[]>({
+    queryKey: ['required-skills', projectId],
+    queryFn: () => api.get<ProjectRequiredSkill[]>(`/projects/${projectId}/required-skills`),
+  });
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (skillDropdownRef.current && !skillDropdownRef.current.contains(e.target as Node)) setSkillDropdownOpen(false);
+      if (empDropdownRef.current && !empDropdownRef.current.contains(e.target as Node)) setEmpDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const assignedIds = new Set(assignments.map(a => a.user_id));
-  const filteredEmployees = employees.filter(
-    e => !assignedIds.has(e.user_id) &&
-      e.name.toLowerCase().includes(employeeSearch.toLowerCase())
-  );
 
-  const handleAssign = async (userId: string) => {
+  const handleAssign = async (emp: AssignableEmployee) => {
+    if (emp.already_assigned) return;
     try {
-      await api.post('/employee-projects', { user_id: userId, project_id: projectId });
+      // Auto-suggest role: find a project role whose name partially matches the suggestion
+      let roleId: string | undefined;
+      if (emp.suggested_role && roles.length > 0) {
+        const suggestion = emp.suggested_role.toLowerCase();
+        const match = roles.find(r =>
+          r.name.toLowerCase().includes(suggestion.split(' ')[0]) ||
+          suggestion.includes(r.name.toLowerCase().split(' ')[0])
+        );
+        roleId = match?.id;
+      }
+      await api.post('/employee-projects', {
+        user_id: emp.id,
+        project_id: projectId,
+        ...(roleId ? { role_id: roleId } : {}),
+      });
       queryClient.invalidateQueries({ queryKey: ['project-assignments', projectId] });
       queryClient.invalidateQueries({ queryKey: ['assigned-projects'] });
-      toast.success('Employee assigned.');
+      queryClient.invalidateQueries({ queryKey: ['skill-coverage', projectId] });
+      const msg = roleId
+        ? `${emp.name} assigned${roles.find(r => r.id === roleId) ? ` as ${roles.find(r => r.id === roleId)!.name}` : ''}.`
+        : `${emp.name} assigned.`;
+      toast.success(msg);
       setEmployeeSearch('');
+      setEmpDropdownOpen(false);
     } catch { toast.error('Something went wrong.'); }
   };
 
@@ -322,6 +527,7 @@ function ProjectAssignmentsPanel({ projectId }: { projectId: string }) {
       await api.delete(`/employee-projects/${assignmentId}`);
       queryClient.invalidateQueries({ queryKey: ['project-assignments', projectId] });
       queryClient.invalidateQueries({ queryKey: ['assigned-projects'] });
+      queryClient.invalidateQueries({ queryKey: ['skill-coverage', projectId] });
       toast.success('Employee removed from project.');
     } catch { toast.error('Something went wrong.'); }
   };
@@ -330,42 +536,248 @@ function ProjectAssignmentsPanel({ projectId }: { projectId: string }) {
     try {
       await api.put(`/employee-projects/${assignmentId}`, { role_id: roleId === '__none__' ? null : roleId });
       queryClient.invalidateQueries({ queryKey: ['project-assignments', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['assigned-projects'] });
       toast.success('Role updated.');
     } catch { toast.error('Something went wrong.'); }
   };
+
+  const clearFilters = () => {
+    setSelectedSkills([]);
+    setSkillSearchInput('');
+    setCategoryFilter('');
+    setMinLevel('');
+    setMatchMode('all');
+  };
+
+  const matchColor = (score: number) =>
+    score >= 80 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'
+    : score >= 50 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+    : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+
+  // Employees shown in the search dropdown
+  const dropdownEmployees: AssignableEmployee[] = hasActiveFilters
+    ? assignableEmployees
+    : [];
 
   if (isLoading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>;
 
   return (
     <div className="space-y-4">
-      <div className="space-y-1">
-        <Label>Add employee</Label>
-        <div className="relative max-w-xs">
+      {/* Skill Gap Section */}
+      {requiredSkills.length > 0 && (
+        <SkillGapSection projectId={projectId} onManageSkills={() => setManageOpen(true)} />
+      )}
+
+      {/* ── Add Employee ── */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Add employee</Label>
+          {requiredSkills.length === 0 && (
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => setManageOpen(true)}>
+              <Plus className="h-3 w-3" /> Define required skills
+            </Button>
+          )}
+        </div>
+
+        {/* Name search */}
+        <div className="relative max-w-sm" ref={empDropdownRef}>
           <Input
             value={employeeSearch}
-            onChange={e => setEmployeeSearch(e.target.value)}
-            placeholder="Search by name..."
+            onChange={e => { setEmployeeSearch(e.target.value); setEmpDropdownOpen(true); }}
+            onFocus={() => setEmpDropdownOpen(true)}
+            placeholder="🔍 Search by name..."
             className="h-9"
           />
-          {employeeSearch && filteredEmployees.length > 0 && (
-            <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md max-h-48 overflow-y-auto">
-              {filteredEmployees.slice(0, 10).map(emp => (
+          {empDropdownOpen && (hasActiveFilters || employeeSearch) && (
+            <div className="absolute z-50 mt-1 w-full min-w-[320px] rounded-md border bg-popover shadow-md max-h-64 overflow-y-auto">
+              {fetchingAssignable && (
+                <div className="flex items-center justify-center py-3 gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Searching...
+                </div>
+              )}
+              {!fetchingAssignable && dropdownEmployees.length === 0 && hasActiveFilters && (
+                <p className="px-3 py-4 text-sm text-muted-foreground text-center">
+                  No employees found with these skills. Try relaxing the filters.
+                </p>
+              )}
+              {!fetchingAssignable && dropdownEmployees.length === 0 && !hasActiveFilters && (
+                <p className="px-3 py-4 text-sm text-muted-foreground text-center">
+                  Type a name or apply skill filters to search.
+                </p>
+              )}
+              {dropdownEmployees.map(emp => (
                 <button
                   key={emp.id}
                   type="button"
-                  className="flex w-full items-center px-3 py-2 text-sm hover:bg-accent text-left gap-2"
-                  onClick={() => handleAssign(emp.user_id)}
+                  disabled={emp.already_assigned}
+                  className={`flex w-full flex-col px-3 py-2.5 text-sm text-left gap-1 border-b last:border-0 transition-colors
+                    ${emp.already_assigned
+                      ? 'opacity-50 cursor-not-allowed bg-muted/30'
+                      : 'hover:bg-accent cursor-pointer'}`}
+                  onClick={() => handleAssign(emp)}
                 >
-                  <span className="font-medium">{emp.name}</span>
-                  {emp.email && <span className="text-xs text-muted-foreground">{emp.email}</span>}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{emp.name}</span>
+                      {emp.title && <span className="text-xs text-muted-foreground">{emp.title}</span>}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {emp.already_assigned && (
+                        <Badge variant="secondary" className="text-xs">Already assigned</Badge>
+                      )}
+                      {selectedSkills.length > 0 && !emp.already_assigned && (
+                        <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${matchColor(emp.match_score)}`}>
+                          {emp.match_score}% match
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Skill chips */}
+                  {selectedSkills.length > 0 && emp.matched_skills.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {emp.matched_skills.map(s => {
+                        const sk = emp.skills.find(sk => sk.name === s);
+                        return (
+                          <span key={s} className="inline-flex items-center gap-1 text-xs bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded px-1.5 py-0.5">
+                            {s} {sk && <ProficiencyStars level={sk.level} />}
+                          </span>
+                        );
+                      })}
+                      {emp.missing_skills.map(s => (
+                        <span key={s} className="text-xs bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 rounded px-1.5 py-0.5">
+                          {s} missing
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* No skills note */}
+                  {emp.skills.length === 0 && (
+                    <span className="text-xs text-muted-foreground">No skills on profile</span>
+                  )}
+
+                  {/* Role suggestion */}
+                  {emp.suggested_role && !emp.already_assigned && (
+                    <span className="text-xs text-primary">Suggested role: {emp.suggested_role}</span>
+                  )}
                 </button>
               ))}
             </div>
           )}
         </div>
+
+        {/* Skill filter row */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+
+          {/* Skill multi-select */}
+          <div className="relative" ref={skillDropdownRef}>
+            <button
+              type="button"
+              className="flex items-center gap-1.5 h-8 px-3 rounded-md border text-sm bg-background hover:bg-accent transition-colors"
+              onClick={() => setSkillDropdownOpen(v => !v)}
+            >
+              🛠 Filter by skill
+              <span className="text-muted-foreground">▾</span>
+            </button>
+            {skillDropdownOpen && (
+              <div className="absolute z-50 mt-1 w-64 rounded-md border bg-popover shadow-md">
+                <div className="p-2 border-b">
+                  <Input
+                    autoFocus
+                    value={skillSearchInput}
+                    onChange={e => setSkillSearchInput(e.target.value)}
+                    placeholder="Search skills..."
+                    className="h-7 text-sm"
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {filteredCatalog.length === 0 ? (
+                    <p className="px-3 py-3 text-sm text-muted-foreground text-center">No skills found</p>
+                  ) : (
+                    filteredCatalog.slice(0, 12).map(s => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className="flex w-full items-center justify-between px-3 py-1.5 text-sm hover:bg-accent text-left"
+                        onClick={() => {
+                          setSelectedSkills(prev => [...prev, { id: s.id, name: s.name }]);
+                          setSkillDropdownOpen(false);
+                          setSkillSearchInput('');
+                        }}
+                      >
+                        <span>{s.name}</span>
+                        <span className="text-xs text-muted-foreground">{s.category}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Category filter */}
+          <Select value={categoryFilter || '_all'} onValueChange={v => setCategoryFilter(v === '_all' ? '' : v)}>
+            <SelectTrigger className="h-8 w-36 text-sm">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_all">All categories</SelectItem>
+              {SKILL_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          {/* Min level filter */}
+          <Select value={minLevel || '_any'} onValueChange={v => setMinLevel(v === '_any' ? '' : v)}>
+            <SelectTrigger className="h-8 w-36 text-sm">
+              <SelectValue placeholder="Min. Level" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_any">Any level</SelectItem>
+              {MIN_LEVEL_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          {/* AND/OR toggle — only when 2+ skills selected */}
+          {selectedSkills.length > 1 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1"
+              onClick={() => setMatchMode(v => v === 'all' ? 'any' : 'all')}
+            >
+              Match: <strong>{matchMode === 'all' ? 'All skills' : 'Any skill'}</strong>
+            </Button>
+          )}
+
+          {/* Clear filters */}
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={clearFilters}>
+              <X className="h-3 w-3" /> Clear filters
+            </Button>
+          )}
+        </div>
+
+        {/* Selected skill chips */}
+        {selectedSkills.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {selectedSkills.map(s => (
+              <Badge key={s.id} variant="secondary" className="gap-1 pl-2 pr-1">
+                {s.name}
+                <button
+                  type="button"
+                  className="ml-0.5 rounded hover:bg-muted"
+                  onClick={() => setSelectedSkills(prev => prev.filter(x => x.id !== s.id))}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        )}
       </div>
 
+      {/* ── Assignments table ── */}
       {assignments.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">No employees assigned yet.</p>
       ) : (
@@ -406,6 +818,9 @@ function ProjectAssignmentsPanel({ projectId }: { projectId: string }) {
           </TableBody>
         </Table>
       )}
+
+      {/* Manage required skills dialog */}
+      <ManageRequiredSkillsDialog projectId={projectId} open={manageOpen} onClose={() => setManageOpen(false)} />
     </div>
   );
 }

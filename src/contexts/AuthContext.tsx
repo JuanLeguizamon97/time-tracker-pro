@@ -46,10 +46,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile]);
 
   const signOut = async () => {
-    localStorage.removeItem('mock_user');
-    setEmployee(null);
-    setRole('employee');
-    window.location.href = '/auth';
+    try {
+      localStorage.removeItem('mock_user');
+      setEmployee(null);
+      setRole('employee');
+    } finally {
+      window.location.href = '/auth';
+    }
   };
 
   const value: AuthContextType = {

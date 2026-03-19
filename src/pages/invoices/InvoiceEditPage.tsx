@@ -1,10 +1,10 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2, Plus, Trash2, Clock, FileDown, FileSpreadsheet, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Plus, Trash2, Clock, FileDown, FileSpreadsheet, RefreshCw, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useInvoiceEditData, usePatchInvoice } from '@/hooks/useInvoices';
-import { InvoiceEditLine, InvoiceExpense, InvoiceLinePatch, InvoiceExpensePatch } from '@/types';
+import { InvoiceEditLine, InvoiceExpense, InvoiceLinePatch, InvoiceExpensePatch, OnHoldEntryPatch } from '@/types';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
+import { getSignatoriesForCompany, type CompanyCode } from '@/lib/invoice/signatories';
 
 const EXPENSE_CATEGORIES = ['Airfare', 'Hotel', 'Parking / Transportation', 'Meals', 'Other'];
 
@@ -31,8 +32,12 @@ const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'cancelled', 'voided'];
 type LocalLine = InvoiceEditLine & {
   _discountType: 'amount' | 'percent';
   _discountValue: number;
+  _discountInput: string;
   _hours: number;
+  _hoursInput: string;
   _rate: number;
+  _rateInput: string;
+  _originalHours: number;
 };
 
 type LocalExpense = Partial<InvoiceExpense> & {
@@ -67,11 +72,23 @@ export default function InvoiceEditPage() {
   const [issueDate, setIssueDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [periodStart, setPeriodStart] = useState('');
+  const [periodEnd, setPeriodEnd] = useState('');
+  const [signatoryName, setSignatoryName] = useState('');
+  const [signatoryTitle, setSignatoryTitle] = useState('');
+  const [ownerCompany, setOwnerCompany] = useState<CompanyCode>('IPC');
   const [initialized, setInitialized] = useState(false);
 
   // Export state
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingXlsx, setExportingXlsx] = useState(false);
+
+  const [isDirty, setIsDirty] = useState(false);
+  // Snapshot of lines before a save attempt — used for optimistic-revert on error
+  const saveSnapshot = useRef<LocalLine[]>([]);
+
+  // Signatories filtered by company (local config — no API call needed)
+  const signatories = useMemo(() => getSignatoriesForCompany(ownerCompany), [ownerCompany]);
 
   // Expensify panel state
   const [expensifyOpen, setExpensifyOpen] = useState(false);
@@ -91,8 +108,12 @@ export default function InvoiceEditPage() {
         ...l,
         _discountType: (l.discount_type as 'amount' | 'percent') || 'amount',
         _discountValue: l.discount_value ?? 0,
+        _discountInput: String(l.discount_value ?? 0),
         _hours: l.hours,
+        _hoursInput: String(l.hours),
         _rate: l.hourly_rate,
+        _rateInput: String(l.hourly_rate),
+        _originalHours: l.original_hours ?? l.hours,
       }))
     );
     setExpenses(data.expenses.map(e => ({ ...e })));
@@ -102,11 +123,24 @@ export default function InvoiceEditPage() {
     setIssueDate(data.invoice.issue_date || '');
     setDueDate(data.invoice.due_date || '');
     setNotes(data.invoice.notes || '');
+    setPeriodStart((data.invoice as any).period_start || '');
+    setPeriodEnd((data.invoice as any).period_end || '');
+    setSignatoryName((data.invoice as any).signatory_name || '');
+    setSignatoryTitle((data.invoice as any).signatory_title || '');
+    const company = ((data.invoice as any).owner_company || data.project?.owner_company || 'IPC') as CompanyCode;
+    setOwnerCompany(company);
+    setIsDirty(false);
     setInitialized(true);
   }
 
   const updateLine = useCallback((id: string, updates: Partial<LocalLine>) => {
+    setIsDirty(true);
     setLines(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
+  }, []);
+
+  const resetLine = useCallback((id: string) => {
+    setLines(prev => prev.map(l => l.id === id ? { ...l, _hours: l._originalHours, _hoursInput: String(l._originalHours) } : l));
+    setIsDirty(true);
   }, []);
 
   // Group lines by role
@@ -135,6 +169,20 @@ export default function InvoiceEditPage() {
     const totalDue = (cap != null ? Math.min(subtotalFees, cap) : subtotalFees) + totalExpenses;
     return { totalFees, totalDiscounts, totalExpenses, subtotalFees, totalDue, cap };
   }, [lines, expenses, capAmount]);
+
+  // On-hold summary (hours reduced below original)
+  const onHoldSummary = useMemo(() => {
+    let hours = 0;
+    let amount = 0;
+    for (const line of lines) {
+      const delta = line._originalHours - line._hours;
+      if (delta > 0.001) {
+        hours += delta;
+        amount += delta * line._rate;
+      }
+    }
+    return { hours, amount };
+  }, [lines]);
 
   // Expense category subtotals
   const expenseCategoryTotals = useMemo(() => {
@@ -178,6 +226,8 @@ export default function InvoiceEditPage() {
 
   const handleSave = async () => {
     if (!invoiceId) return;
+    // Take a snapshot for potential revert on error
+    saveSnapshot.current = lines;
     try {
       const linePatches: InvoiceLinePatch[] = lines.map(l => ({
         id: l.id,
@@ -201,23 +251,42 @@ export default function InvoiceEditPage() {
         notes: e.notes || null,
       }));
 
+      const onHoldEntries: OnHoldEntryPatch[] = lines
+        .filter(l => l.user_id)
+        .map(l => ({
+          line_id: l.id,
+          employee_name: l.employee_name,
+          original_hours: l._originalHours,
+          billed_hours: l._hours,
+          rate: l._rate,
+          has_on_hold: l._hours < l._originalHours - 0.001,
+        }));
+
       await patchInvoice.mutateAsync({
         id: invoiceId,
         patch: {
           status,
           cap_amount: capAmount ? parseFloat(capAmount) : null,
-          invoice_number: invoiceNumber || null,
           issue_date: issueDate || null,
           due_date: dueDate || null,
+          period_start: periodStart || null,
+          period_end: periodEnd || null,
           notes: notes || null,
+          signatory_name: signatoryName || null,
+          signatory_title: signatoryTitle || null,
+          owner_company: ownerCompany,
           lines: linePatches,
           expenses: expensePatches,
+          on_hold_entries: onHoldEntries,
         },
       });
-      toast.success('Invoice saved successfully.');
-      setInitialized(false); // re-init from server on next render
-    } catch {
-      toast.error('Error saving invoice.');
+      toast.success('Invoice saved.');
+      setIsDirty(false);
+      setInitialized(false); // reconcile state from server response
+    } catch (err: any) {
+      // Revert optimistic state
+      setLines(saveSnapshot.current);
+      toast.error(err?.message?.includes('422') ? 'Invalid data — check required fields.' : 'Error saving invoice.');
     }
   };
 
@@ -399,11 +468,40 @@ export default function InvoiceEditPage() {
             <CardHeader>
               <CardTitle className="text-base">Invoice Details</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Owner Company toggle */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Owner Company</Label>
+                <div className="flex gap-2">
+                  {(['IPC', 'PI'] as CompanyCode[]).map(co => (
+                    <button
+                      key={co}
+                      type="button"
+                      onClick={() => {
+                        setOwnerCompany(co);
+                        setIsDirty(true);
+                        // Reset signatory when company changes
+                        setSignatoryName('');
+                        setSignatoryTitle('');
+                      }}
+                      className={`flex-1 rounded-md border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                        ownerCompany === co
+                          ? co === 'IPC'
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-purple-600 text-white border-purple-600'
+                          : 'border-input bg-background text-muted-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {co === 'IPC' ? 'IPC — Impact Point Co.' : 'PI — Pegasus Insights'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Status</Label>
-                  <Select value={status} onValueChange={setStatus}>
+                  <Select value={status} onValueChange={v => { setStatus(v); setIsDirty(true); }}>
                     <SelectTrigger className="h-8">
                       <SelectValue />
                     </SelectTrigger>
@@ -416,12 +514,13 @@ export default function InvoiceEditPage() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Invoice Number</Label>
-                  <Input
-                    className="h-8"
-                    value={invoiceNumber}
-                    onChange={e => setInvoiceNumber(e.target.value)}
-                    placeholder="e.g. 2026-001"
-                  />
+                  <div
+                    title="Invoice number is locked after creation"
+                    className="flex items-center gap-1.5 rounded-md border border-input bg-muted/40 px-2.5 py-1.5 text-sm h-8 cursor-default select-none"
+                  >
+                    <span className="font-mono font-semibold flex-1 truncate">{invoiceNumber || '—'}</span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">Locked</span>
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Issue Date</Label>
@@ -439,6 +538,54 @@ export default function InvoiceEditPage() {
                     className="h-8"
                     value={dueDate}
                     onChange={e => setDueDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Period From</Label>
+                  <Input
+                    type="date"
+                    className="h-8"
+                    value={periodStart}
+                    onChange={e => setPeriodStart(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Period To</Label>
+                  <Input
+                    type="date"
+                    className="h-8"
+                    value={periodEnd}
+                    onChange={e => setPeriodEnd(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Signatory</Label>
+                  <Select
+                    value={signatoryName}
+                    onValueChange={name => {
+                      setSignatoryName(name);
+                      setIsDirty(true);
+                      const sig = signatories.find(s => s.name === name);
+                      if (sig) setSignatoryTitle(sig.title);
+                    }}
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue placeholder="Select signatory…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {signatories.map(s => (
+                        <SelectItem key={s.name} value={s.name}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Signatory Title</Label>
+                  <Input
+                    className="h-8"
+                    value={signatoryTitle}
+                    onChange={e => setSignatoryTitle(e.target.value)}
+                    placeholder="e.g. Managing Partner"
                   />
                 </div>
                 <div className="space-y-1 sm:col-span-2">
@@ -495,14 +642,50 @@ export default function InvoiceEditPage() {
                                 <Badge variant="outline" className="text-xs mt-1 capitalize">{line.role || 'employee'}</Badge>
                               </TableCell>
                               <TableCell className="text-right">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.5"
-                                  value={line._hours}
-                                  onChange={e => updateLine(line.id, { _hours: parseFloat(e.target.value) || 0 })}
-                                  className="w-20 h-7 text-right text-sm ml-auto"
-                                />
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max={line._originalHours}
+                                    step="0.25"
+                                    value={line._hoursInput}
+                                    onFocus={e => e.target.select()}
+                                    onChange={e => {
+                                      const raw = e.target.value;
+                                      const num = parseFloat(raw);
+                                      updateLine(line.id, {
+                                        _hoursInput: raw,
+                                        ...(raw !== '' && !isNaN(num) ? { _hours: num } : {}),
+                                      });
+                                    }}
+                                    onBlur={e => {
+                                      const num = parseFloat(e.target.value);
+                                      const resolved = isNaN(num) ? 0 : num;
+                                      updateLine(line.id, { _hours: resolved, _hoursInput: String(resolved) });
+                                    }}
+                                    className="w-20 h-7 text-right text-sm"
+                                  />
+                                  {line._hours < line._originalHours - 0.001 && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                                        {(line._originalHours - line._hours).toFixed(2)}h on hold
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => resetLine(line.id)}
+                                        className="text-xs text-muted-foreground hover:text-foreground"
+                                        title="Reset to original hours"
+                                      >
+                                        <RotateCcw className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  )}
+                                  {line._hours > line._originalHours + 0.001 && (
+                                    <span className="text-xs text-destructive">
+                                      ⚠ Exceeds {line._originalHours.toFixed(2)}h
+                                    </span>
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex items-center justify-end gap-1">
@@ -511,8 +694,21 @@ export default function InvoiceEditPage() {
                                     type="number"
                                     min="0"
                                     step="0.01"
-                                    value={line._rate}
-                                    onChange={e => updateLine(line.id, { _rate: parseFloat(e.target.value) || 0 })}
+                                    value={line._rateInput}
+                                    onFocus={e => e.target.select()}
+                                    onChange={e => {
+                                      const raw = e.target.value;
+                                      const num = parseFloat(raw);
+                                      updateLine(line.id, {
+                                        _rateInput: raw,
+                                        ...(raw !== '' && !isNaN(num) ? { _rate: num } : {}),
+                                      });
+                                    }}
+                                    onBlur={e => {
+                                      const num = parseFloat(e.target.value);
+                                      const resolved = isNaN(num) ? 0 : num;
+                                      updateLine(line.id, { _rate: resolved, _rateInput: String(resolved) });
+                                    }}
                                     className="w-20 h-7 text-right text-sm"
                                   />
                                 </div>
@@ -527,8 +723,21 @@ export default function InvoiceEditPage() {
                                       type="number"
                                       min="0"
                                       step="0.01"
-                                      value={line._discountValue}
-                                      onChange={e => updateLine(line.id, { _discountValue: parseFloat(e.target.value) || 0 })}
+                                      value={line._discountInput}
+                                      onFocus={e => e.target.select()}
+                                      onChange={e => {
+                                        const raw = e.target.value;
+                                        const num = parseFloat(raw);
+                                        updateLine(line.id, {
+                                          _discountInput: raw,
+                                          ...(raw !== '' && !isNaN(num) ? { _discountValue: num } : {}),
+                                        });
+                                      }}
+                                      onBlur={e => {
+                                        const num = parseFloat(e.target.value);
+                                        const resolved = isNaN(num) ? 0 : num;
+                                        updateLine(line.id, { _discountValue: resolved, _discountInput: String(resolved) });
+                                      }}
                                       className="w-20 h-7 text-right text-sm"
                                     />
                                     <Button
@@ -718,14 +927,44 @@ export default function InvoiceEditPage() {
                 <CardTitle className="text-base">Invoice Summary</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
+                {/* Company context */}
+                <div className="flex items-center justify-between pb-1">
+                  {ownerCompany === 'IPC' ? (
+                    <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 text-xs font-semibold">
+                      IPC — Impact Point Co.
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 px-2 py-0.5 text-xs font-semibold">
+                      PI — Pegasus Insights
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground font-mono">{invoiceLabel}</span>
+                </div>
+                {signatoryName && (
+                  <div className="text-xs text-muted-foreground border-b pb-2">
+                    Signatory: <span className="font-medium text-foreground">{signatoryName}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Total Fees</span>
-                  <span className="font-medium">${summary.totalFees.toFixed(2)}</span>
+                  <span className="font-medium">${(summary.totalFees + summary.totalDiscounts).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-destructive/80">
                   <span>Total Discounts</span>
                   <span>-${summary.totalDiscounts.toFixed(2)}</span>
                 </div>
+                {onHoldSummary.hours > 0.001 && (
+                  <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                    <span className="flex items-center gap-1">
+                      <span>🟡</span>
+                      Hours on Hold
+                    </span>
+                    <span className="text-right text-xs leading-tight">
+                      {onHoldSummary.hours.toFixed(2)}h<br/>
+                      <span className="font-medium">-${onHoldSummary.amount.toFixed(2)}</span>
+                    </span>
+                  </div>
+                )}
 
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Cap Amount</Label>
@@ -769,9 +1008,14 @@ export default function InvoiceEditPage() {
               </CardContent>
             </Card>
 
+            {isDirty && !patchInvoice.isPending && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 text-center -mb-1">
+                Unsaved changes
+              </p>
+            )}
             <Button
               onClick={handleSave}
-              disabled={patchInvoice.isPending}
+              disabled={patchInvoice.isPending || !isDirty}
               className="w-full gap-2"
             >
               {patchInvoice.isPending

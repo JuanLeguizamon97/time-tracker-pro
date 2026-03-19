@@ -138,7 +138,7 @@ export default function Timesheet() {
               continue;
             }
             promises.push(createTimeEntry.mutateAsync({
-              user_id: employee.user_id,
+              user_id: employee.id,
               project_id: entry.projectId,
               date: dateStr,
               hours: entry.hours,
