@@ -77,6 +77,10 @@ export default function InvoiceEditPage() {
   const [signatoryName, setSignatoryName] = useState('');
   const [signatoryTitle, setSignatoryTitle] = useState('');
   const [ownerCompany, setOwnerCompany] = useState<CompanyCode>('IPC');
+  const [originalCompany, setOriginalCompany] = useState<CompanyCode>('IPC');
+  const [previewNumber, setPreviewNumber] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const previewAbortRef = useRef<AbortController | null>(null);
   const [initialized, setInitialized] = useState(false);
 
   // Export state
@@ -129,6 +133,8 @@ export default function InvoiceEditPage() {
     setSignatoryTitle((data.invoice as any).signatory_title || '');
     const company = ((data.invoice as any).owner_company || data.project?.owner_company || 'IPC') as CompanyCode;
     setOwnerCompany(company);
+    setOriginalCompany(company);
+    setPreviewNumber(null);
     setIsDirty(false);
     setInitialized(true);
   }
@@ -480,9 +486,25 @@ export default function InvoiceEditPage() {
                       onClick={() => {
                         setOwnerCompany(co);
                         setIsDirty(true);
-                        // Reset signatory when company changes
                         setSignatoryName('');
                         setSignatoryTitle('');
+                        if (co !== originalCompany) {
+                          previewAbortRef.current?.abort();
+                          const ctrl = new AbortController();
+                          previewAbortRef.current = ctrl;
+                          setPreviewLoading(true);
+                          fetch(`/api/invoices/preview-number?company=${co}`, { signal: ctrl.signal })
+                            .then(r => r.json())
+                            .then((d: { invoice_number: string }) => {
+                              setPreviewNumber(d.invoice_number);
+                              setPreviewLoading(false);
+                            })
+                            .catch(err => { if (err.name !== 'AbortError') setPreviewLoading(false); });
+                        } else {
+                          previewAbortRef.current?.abort();
+                          setPreviewNumber(null);
+                          setPreviewLoading(false);
+                        }
                       }}
                       className={`flex-1 rounded-md border px-3 py-1.5 text-sm font-semibold transition-colors ${
                         ownerCompany === co
@@ -514,13 +536,24 @@ export default function InvoiceEditPage() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Invoice Number</Label>
-                  <div
-                    title="Invoice number is locked after creation"
-                    className="flex items-center gap-1.5 rounded-md border border-input bg-muted/40 px-2.5 py-1.5 text-sm h-8 cursor-default select-none"
-                  >
-                    <span className="font-mono font-semibold flex-1 truncate">{invoiceNumber || '—'}</span>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">Locked</span>
-                  </div>
+                  {ownerCompany !== originalCompany ? (
+                    <div className="flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 px-2.5 py-1.5 text-sm h-8 cursor-default select-none">
+                      {previewLoading ? (
+                        <><Loader2 className="h-3 w-3 animate-spin text-amber-600" /><span className="text-amber-700 dark:text-amber-400 text-xs">Generating…</span></>
+                      ) : (
+                        <><span className="font-mono font-semibold flex-1 truncate text-amber-800 dark:text-amber-300">{previewNumber || '—'}</span>
+                          <span className="text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap">New on save</span></>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      title="Invoice number is locked after creation"
+                      className="flex items-center gap-1.5 rounded-md border border-input bg-muted/40 px-2.5 py-1.5 text-sm h-8 cursor-default select-none"
+                    >
+                      <span className="font-mono font-semibold flex-1 truncate">{invoiceNumber || '—'}</span>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">Locked</span>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Issue Date</Label>

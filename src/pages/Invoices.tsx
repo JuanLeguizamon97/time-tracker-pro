@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, FileText, DollarSign, ChevronRight, Loader2, CheckCircle, Calendar } from 'lucide-react';
+import { Plus, FileText, DollarSign, ChevronRight, Loader2, CheckCircle, Calendar, RefreshCw, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useInvoices } from '@/hooks/useInvoices';
@@ -25,7 +25,7 @@ const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string }> = {
 
 export default function Invoices() {
   const navigate = useNavigate();
-  const { data: invoices = [], isLoading } = useInvoices();
+  const { data: invoices = [], isLoading, refetch, isRefetching } = useInvoices();
   const { data: projects = [] } = useProjects();
   const { data: clients = [] } = useClients();
 
@@ -41,6 +41,29 @@ export default function Invoices() {
   };
   const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportReport = async () => {
+    setIsExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (companyFilter !== 'all') params.set('company', companyFilter);
+      const url = `/api/invoices/export/report${params.toString() ? `?${params}` : ''}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `Invoices_Report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      toast.error('Failed to export report.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   useEffect(() => {
     api.get<SchedulerStatus>('/invoices/scheduler-status')
@@ -118,9 +141,23 @@ export default function Invoices() {
           <h1 className="text-2xl font-bold text-foreground">Invoices</h1>
           <p className="text-muted-foreground">Create and manage project invoices</p>
         </div>
-        <Button className="gap-2" onClick={() => navigate('/invoices/new')}>
-          <Plus className="h-4 w-4" />New Invoice
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isRefetching} title="Refresh invoices">
+            <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2 border-green-600 text-green-700 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-950"
+            onClick={handleExportReport}
+            disabled={isExporting}
+          >
+            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Excel Report
+          </Button>
+          <Button className="gap-2" onClick={() => navigate('/invoices/new')}>
+            <Plus className="h-4 w-4" />New Invoice
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}

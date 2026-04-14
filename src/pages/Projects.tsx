@@ -140,7 +140,11 @@ function ProjectCard({
           <Badge variant={(STATUS_COLORS[project.status] as any) || 'secondary'} className="capitalize text-xs">
             {project.status?.replace('_', ' ') || 'active'}
           </Badge>
-          {project.is_internal && <Badge variant="outline" className="text-xs">Internal</Badge>}
+          {project.is_internal && (
+            <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 px-2 py-0.5 text-xs font-semibold">
+              Internal
+            </span>
+          )}
           {project.project_code && (
             <Badge variant="outline" className="text-xs font-mono">{project.project_code}</Badge>
           )}

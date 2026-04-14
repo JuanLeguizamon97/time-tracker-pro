@@ -27,6 +27,7 @@ const EmployeeProfilePage = lazy(() => import("./pages/employees/EmployeeProfile
 const ProjectDetailPage = lazy(() => import("./pages/projects/ProjectDetailPage"));
 const ProjectEditPage = lazy(() => import("./pages/projects/ProjectEditPage"));
 const Reports = lazy(() => import("./pages/Reports"));
+const ProfilePage = lazy(() => import("./pages/profile/ProfilePage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Auth = lazy(() => import("./pages/Auth"));
 
@@ -71,6 +72,7 @@ const App = () => (
               <Route path="/invoices/:invoiceId/edit" element={<ProtectedRoute><MainLayout><InvoiceEditPage /></MainLayout></ProtectedRoute>} />
               <Route path="/invoices/:invoiceId" element={<ProtectedRoute><MainLayout><InvoiceDetailPage /></MainLayout></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><MainLayout><Reports /></MainLayout></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute><MainLayout><ProfilePage /></MainLayout></ProtectedRoute>} />
               {/* Legacy routes */}
               <Route path="/historial" element={<Navigate to="/history" replace />} />
               <Route path="/proyectos" element={<Navigate to="/projects" replace />} />

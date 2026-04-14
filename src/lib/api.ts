@@ -21,13 +21,19 @@ async function getAccessToken(): Promise<string | null> {
   if (AUTH_MODE === 'mock') return null;
 
   const accounts = msalInstance.getAllAccounts();
-  if (accounts.length === 0) throw new Error('No authenticated account');
+  if (accounts.length === 0) return null;
 
-  const response = await msalInstance.acquireTokenSilent({
-    ...loginRequest,
-    account: accounts[0],
-  });
-  return response.accessToken;
+  try {
+    const response = await msalInstance.acquireTokenSilent({
+      ...loginRequest,
+      account: accounts[0],
+    });
+    return response.accessToken;
+  } catch {
+    // Silent refresh failed (expired token, consent needed) — redirect to Microsoft login
+    msalInstance.loginRedirect(loginRequest);
+    return null;
+  }
 }
 
 async function apiFetchBlob(path: string): Promise<Blob> {

@@ -11,6 +11,7 @@ const adminNavigationItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Weekly Log', url: '/timesheet', icon: Clock },
   { title: 'History', url: '/history', icon: Calendar },
+  { title: 'My Profile', url: '/profile', icon: UserCircle },
   { title: 'Projects', url: '/projects', icon: Briefcase },
   { title: 'Clients', url: '/clients', icon: Users },
   { title: 'Employees', url: '/employees', icon: UserCircle },
@@ -22,6 +23,7 @@ const employeeNavigationItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Weekly Log', url: '/timesheet', icon: Clock },
   { title: 'History', url: '/history', icon: Calendar },
+  { title: 'My Profile', url: '/profile', icon: UserCircle },
   { title: 'Reports', url: '/reports', icon: BarChart3 },
 ];
 
